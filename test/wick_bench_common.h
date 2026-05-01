@@ -5,6 +5,8 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -75,6 +77,70 @@ struct benchmark_record
     double seconds;
     double checksum_delta;
 };
+
+/** \brief Runtime benchmark options.
+ **/
+struct benchmark_options
+{
+    size_t total_cases;
+    double scale;
+
+    benchmark_options() :
+        total_cases(262144),
+        scale(0.5)
+    { }
+};
+
+/** \brief Parse an unsigned integer from an environment value.
+ **/
+inline size_t parse_size_env(
+    const char *value,
+    const size_t fallback)
+{
+    if(!value) return fallback;
+
+    char *end = 0;
+    const unsigned long long out = std::strtoull(value, &end, 10);
+
+    if(end == value)
+        return fallback;
+
+    return static_cast<size_t>(out);
+}
+
+/** \brief Parse a positive floating-point value from an environment value.
+ **/
+inline double parse_double_env(
+    const char *value,
+    const double fallback)
+{
+    if(!value) return fallback;
+
+    char *end = 0;
+    const double out = std::strtod(value, &end);
+
+    if(end == value || out <= 0.0)
+        return fallback;
+
+    return out;
+}
+
+/** \brief Read benchmark options from environment variables.
+ **/
+inline benchmark_options read_benchmark_options()
+{
+    benchmark_options options;
+
+    options.total_cases = parse_size_env(
+        std::getenv("TOTALCASES"),
+        options.total_cases);
+
+    options.scale = parse_double_env(
+        std::getenv("SCALE"),
+        options.scale);
+
+    return options;
+}
 
 /** \brief Recursively generate combinations.
  **/
@@ -228,15 +294,26 @@ inline std::vector<excitation_class> excitation_classes()
  **/
 inline size_t max_cases_for(
     const excitation_class &bra,
-    const excitation_class &ket)
+    const excitation_class &ket,
+    const benchmark_options &options)
 {
     const size_t total = bra.arank + bra.brank + ket.arank + ket.brank;
 
-    if(total <= 2) return 8192;
-    if(total <= 4) return 4096;
-    if(total <= 6) return 2048;
+    size_t power = 0;
+    if(total <= 2) power = 0;
+    else if(total <= 4) power = 1;
+    else if(total <= 6) power = 2;
+    else power = 3;
 
-    return 1024;
+    const double scaled =
+        static_cast<double>(options.total_cases) * std::pow(options.scale, power);
+
+    size_t cases = static_cast<size_t>(std::ceil(scaled));
+
+    if(cases == 0)
+        cases = 1;
+
+    return cases;
 }
 
 /** \brief Count tensor-product cases with a maximum cap.
@@ -248,6 +325,9 @@ inline size_t count_cases(
     const std::vector<arma::umat> &wb,
     const size_t max_cases)
 {
+    if(max_cases == 0)
+        return 0;
+
     size_t ncase = 0;
 
     for(size_t i=0; i<xa.size(); i++)
@@ -380,13 +460,14 @@ inline void run_class_pair(
     const excitation_class &ket,
     const std::vector<std::vector<arma::umat> > &ea,
     const std::vector<std::vector<arma::umat> > &eb,
+    const benchmark_options &options,
     double &checksum,
     std::vector<benchmark_record> &records)
 {
     std::ostringstream oss;
     oss << "mb.evaluate " << bra.name << "/" << ket.name;
 
-    const size_t max_cases = max_cases_for(bra, ket);
+    const size_t max_cases = max_cases_for(bra, ket, options);
 
     run_cases(
         oss.str(),
@@ -570,6 +651,13 @@ inline int run_uscf_benchmark(
     std::cout << bench_name << "::systematic_spin_rank_benchmark("
               << testcase << ")" << std::endl;
 
+    // Read benchmark options
+    benchmark_options options = read_benchmark_options();
+
+    std::cout << "TOTALCASES: " << options.total_cases << std::endl;
+    std::cout << "SCALE: " << std::fixed << std::setprecision(6)
+              << options.scale << std::endl;
+
     // Read input data
     size_t nbsf = 0, nocca = 0, noccb = 0, nmo = 0, nact = 0;
     arma::mat S, II, Cread;
@@ -641,7 +729,7 @@ inline int run_uscf_benchmark(
 
     for(size_t i=0; i<classes.size(); i++)
     for(size_t j=0; j<classes.size(); j++)
-        run_class_pair(mb, task, classes[i], classes[j], ea, eb, checksum, records);
+        run_class_pair(mb, task, classes[i], classes[j], ea, eb, options, checksum, records);
 
     // Report checksum and timing summary
     print_benchmark_summary(bench_name, task, records, checksum);
@@ -661,6 +749,13 @@ inline int run_rscf_benchmark(
     // Report who we are
     std::cout << bench_name << "::systematic_spin_rank_benchmark("
               << testcase << ")" << std::endl;
+
+    // Read benchmark options
+    benchmark_options options = read_benchmark_options();
+
+    std::cout << "TOTALCASES: " << options.total_cases << std::endl;
+    std::cout << "SCALE: " << std::fixed << std::setprecision(6)
+              << options.scale << std::endl;
 
     // Read input data
     size_t nbsf = 0, nocca = 0, noccb = 0, nmo = 0, nact = 0;
@@ -728,7 +823,7 @@ inline int run_rscf_benchmark(
 
     for(size_t i=0; i<classes.size(); i++)
     for(size_t j=0; j<classes.size(); j++)
-        run_class_pair(mb, task, classes[i], classes[j], ea, eb, checksum, records);
+        run_class_pair(mb, task, classes[i], classes[j], ea, eb, options, checksum, records);
 
     // Report checksum and timing summary
     print_benchmark_summary(bench_name, task, records, checksum);
