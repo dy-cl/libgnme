@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <libgnme/utils/linalg.h>
 #include "wick_base.h"
+#include "wick_eval.h"
 
 namespace libgnme {
 
@@ -41,16 +42,7 @@ void wick_base<Tc,Tf,Tb>::spin_one_body(
 
     // Get particle-hole indices
     arma::uvec rows, cols;
-    if(nx == 0 xor nw == 0)
-    {
-        rows = (nx > 0) ? xhp.col(1) : whp.col(0);
-        cols = (nx > 0) ? xhp.col(0) : whp.col(1);
-    }
-    else if(nx > 0 and nw > 0) 
-    {
-        rows = arma::join_cols(xhp.col(1),whp.col(0));
-        cols = arma::join_cols(xhp.col(0),whp.col(1));
-    }
+    wick_eval::indices(xhp, whp, rows, cols);
 
     // Start with overlap contribution
     if(nx == 0 and nw == 0)
@@ -68,26 +60,29 @@ void wick_base<Tc,Tf,Tb>::spin_one_body(
     else
     {   // General case does require determinant
         // Construct matrix for no zero overlaps
-        arma::Mat<Tc> D  = arma::trimatl(X(0).submat(rows,cols))
-                         + arma::trimatu(Y(0).submat(rows,cols),1);
+        arma::Mat<Tc> D;
+        wick_eval::build_det(X(0), Y(0), rows, cols, D);
+
         // Construct matrix with all zero overlaps
-        arma::Mat<Tc> Db = arma::trimatl(X(1).submat(rows,cols)) 
-                         + arma::trimatu(Y(1).submat(rows,cols),1);
+        arma::Mat<Tc> Db;
+        wick_eval::build_det(X(1), Y(1), rows, cols, Db);
 
         // Matrix of F contractions
         arma::field<arma::Mat<Tc> > Ftmp(dim,dim); 
         for(size_t i=0; i<dim; i++)
         for(size_t j=0; j<dim; j++)
-            Ftmp(i,j) = XFX(i,j).submat(rows,cols);
+            wick_eval::build_mat(XFX(i,j), rows, cols, Ftmp(i,j));
 
         // Compute contribution from the overlap and zeroth term
-        std::vector<size_t> m(nz, 1); m.resize(nx+nw+1, 0); 
-        arma::Col<size_t> ind(&m[1], nx+nw, false, true);
+        std::vector<size_t> m(nz, 1); 
+        m.resize(nx+nw+1, 0);
+        arma::Mat<Tc> Dtmp;
+
         // Loop over all possible contributions of zero overlaps
         do {
-            // Evaluate overlap contribution
-            // TODO: Can we put a Shermann-Morrison update here as well?
-            arma::Mat<Tc> Dtmp = D * arma::diagmat(1-ind) + Db * arma::diagmat(ind);
+            // Evaluate overlap contribution by mixing columns directly
+            std::vector<size_t> ind(m.begin()+1, m.end());
+            wick_eval::mix_det(D, Db, ind, Dtmp);
 
             // Get matrix adjoint and determinant
             Tc detDtmp;
