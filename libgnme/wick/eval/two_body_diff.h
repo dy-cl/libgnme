@@ -303,15 +303,15 @@ inline void two_body_diff_m0_22(
     V = Vab(0,0) * deta * detb
       - (deta_c0 + deta_c1) * detb
       - (detb_c0 + detb_c1) * deta;
-
+    
     const Tc cofa00 = a11;
-    const Tc cofa10 = -a10;
-    const Tc cofa01 = -a01;
+    const Tc cofa10 = -a01;
+    const Tc cofa01 = -a10;
     const Tc cofa11 = a00;
 
     const Tc cofb00 = b11;
-    const Tc cofb10 = -b10;
-    const Tc cofb01 = -b01;
+    const Tc cofb10 = -b01;
+    const Tc cofb01 = -b10;
     const Tc cofb11 = b00;
 
     for(size_t i=0; i<2; i++)
