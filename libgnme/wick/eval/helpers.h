@@ -10,6 +10,80 @@
 namespace libgnme {
 namespace wick_eval {
 
+/** \brief Map an index in a minor matrix back to the full matrix.
+    \param midx Index in the minor matrix.
+    \param removed Removed row or column index in the full matrix.
+    \return Corresponding index in the full matrix.
+    \ingroup gnme_wick
+ **/
+inline size_t minor_to_full(const size_t midx, const size_t removed)
+{
+    return (midx < removed) ? midx : midx + 1;
+}
+
+/** \brief Compute determinant correction from replacing one column.
+    \tparam Tc Matrix element type.
+    \tparam Fn Replacement-column callback type.
+    \param old Original determinant matrix.
+    \param cof Cofactor matrix matching old.
+    \param col Column to replace.
+    \param new_at Callback returning replacement value for row r.
+    \return Cofactor contraction correction.
+    \ingroup gnme_wick
+ **/
+template<typename Tc, typename Fn>
+inline Tc column_replacement_correction(
+    const arma::Mat<Tc> &old,
+    const arma::Mat<Tc> &cof,
+    const size_t col,
+    Fn &&new_at)
+{
+    const size_t n = old.n_rows;
+    Tc correction = Tc(0.0);
+
+    for(size_t r=0; r<n; r++)
+        correction += (new_at(r) - old(r,col)) * cof(r,col);
+
+    return correction;
+}
+
+/** \brief Build a determinant minor and its cofactor matrix.
+    \tparam Tc Matrix element type.
+    \tparam Fn Callback type.
+    \param D Full determinant matrix.
+    \param row_rm Removed row.
+    \param col_rm Removed column.
+    \param Dminor Output minor determinant.
+    \param cof_minor Output minor cofactor matrix.
+    \param f Callback receiving minor size, minor determinant, cofactor matrix, and determinant.
+    \ingroup gnme_wick
+ **/
+template<typename Tc, typename Fn>
+inline void minor_adjt(
+    const arma::Mat<Tc> &D,
+    const size_t row_rm,
+    const size_t col_rm,
+    arma::Mat<Tc> &Dminor,
+    arma::Mat<Tc> &cof_minor,
+    Fn &&f)
+{
+    const size_t l = D.n_rows;
+    const size_t lm1 = l - 1;
+
+    Dminor.set_size(lm1,lm1);
+
+    for(size_t j=0; j<lm1; j++)
+    for(size_t i=0; i<lm1; i++)
+        Dminor(i,j) = D(minor_to_full(i,row_rm), minor_to_full(j,col_rm));
+
+    Tc det_minor;
+    size_t nzero;
+    adjoint_matrix(Dminor, cof_minor, det_minor, nzero);
+    cof_minor = cof_minor.t();
+
+    f(lm1, Dminor, cof_minor, det_minor);
+}
+
 /** \brief Extract a bit from a bitstring.
     \param bits Bitstring.
     \param k Bit index.

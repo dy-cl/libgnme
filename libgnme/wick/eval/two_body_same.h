@@ -11,6 +11,65 @@
 namespace libgnme {
 namespace wick_eval {
 
+/** \brief Read one same-spin two-electron replacement entry.
+    \tparam Tc Matrix element type.
+    \param II Same-spin two-electron intermediate block.
+    \param nact Total active dimension.
+    \param r0 Fixed row index.
+    \param c0 Fixed column index.
+    \param r1 Replacement row index.
+    \param c1 Replacement column index.
+    \return Two-electron replacement entry.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline Tc two_body_same_ii(
+    const arma::Mat<Tc> &II,
+    const size_t nact,
+    const size_t r0, const size_t c0,
+    const size_t r1, const size_t c1)
+{
+    const Tc *ptr = II.colptr(nact * r0 + c0);
+    return ptr[c1 + nact * r1];
+}
+
+/** \brief Read one same-spin II replacement entry for a determinant minor.
+    \tparam Tc Matrix element type.
+    \param II Same-spin two-electron intermediate block.
+    \param nact Total active dimension.
+    \param rows Full determinant row labels.
+    \param cols Full determinant column labels.
+    \param row_rm Removed row in the full determinant.
+    \param col_rm Removed column in the full determinant.
+    \param r_minor Row index in the minor.
+    \param k_minor Column index in the minor.
+    \param r_fixed Fixed first row label.
+    \param c_fixed Fixed first column label.
+    \return Replacement entry.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline Tc two_body_same_ii_replacement(
+    const arma::Mat<Tc> &II,
+    const size_t nact,
+    const arma::uvec &rows,
+    const arma::uvec &cols,
+    const size_t row_rm,
+    const size_t col_rm,
+    const size_t r_minor,
+    const size_t k_minor,
+    const size_t r_fixed,
+    const size_t c_fixed)
+{
+    const size_t r_full = minor_to_full(r_minor, row_rm);
+    const size_t k_full = minor_to_full(k_minor, col_rm);
+
+    return two_body_same_ii(
+        II, nact,
+        r_fixed, c_fixed,
+        rows(r_full), cols(k_full));
+}
+
 /** \brief Evaluate same-spin two-body matrix element for nz = 0 and zero excitations.
     \tparam Tc Matrix element type.
     \param V Output two-body matrix element.
@@ -47,6 +106,65 @@ inline void two_body_same_m0_l1(
     V = V0(0) * X(0)(r0,c0) - Tc(2.0) * XVX(0,0,0)(r0,c0);
 }
 
+/** \brief Evaluate same-spin two-body matrix element for nz = 0 and two excitations.
+    \tparam Tc Matrix element type.
+    \param rows Row indices.
+    \param cols Column indices.
+    \param V Output two-body matrix element.
+    \param X Lower-triangular contractions.
+    \param Y Upper-triangular contractions.
+    \param V0 Zeroth-order same-spin two-body contractions.
+    \param XVX First-order same-spin two-body contractions.
+    \param II Same-spin two-electron intermediates.
+    \param nact Total active dimension for flattened two-electron intermediates.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void two_body_same_m0_l2(
+    const arma::uvec &rows, const arma::uvec &cols,
+    Tc &V,
+    const arma::field<arma::Mat<Tc> > &X,
+    const arma::field<arma::Mat<Tc> > &Y,
+    const arma::Col<Tc> &V0,
+    const arma::field<arma::Mat<Tc> > &XVX,
+    arma::field<arma::Mat<Tc> > &II,
+    const size_t nact)
+{
+    arma::Mat<Tc> D;
+    build_det(X(0), Y(0), rows, cols, D);
+
+    const Tc a00 = D(0,0);
+    const Tc a01 = D(0,1);
+    const Tc a10 = D(1,0);
+    const Tc a11 = D(1,1);
+    const Tc detD = a00 * a11 - a01 * a10;
+
+    const arma::Mat<Tc> &JK = XVX(0,0,0);
+
+    const size_t r0 = rows(0);
+    const size_t r1 = rows(1);
+    const size_t c0 = cols(0);
+    const size_t c1 = cols(1);
+
+    const Tc u0 = JK(r0,c0);
+    const Tc u1 = JK(r1,c0);
+    const Tc v0 = JK(r0,c1);
+    const Tc v1 = JK(r1,c1);
+
+    const Tc det_c0 = u0 * a11 - a01 * u1;
+    const Tc det_c1 = a00 * v1 - v0 * a10;
+
+    const arma::Mat<Tc> &IIslot = II(0,0);
+
+    const Tc jterm =
+          two_body_same_ii(IIslot, nact, r0, c0, r1, c1)
+        - two_body_same_ii(IIslot, nact, r0, c1, r1, c0)
+        - two_body_same_ii(IIslot, nact, r1, c0, r0, c1)
+        + two_body_same_ii(IIslot, nact, r1, c1, r0, c0);
+
+    V = V0(0) * detD - Tc(2.0) * (det_c0 + det_c1) + Tc(0.5) * jterm;
+}
+
 /** \brief Evaluate same-spin two-body matrix element for nz = 0 and arbitrary excitation rank.
     \tparam Tc Matrix element type.
     \param rows Row indices.
@@ -76,60 +194,60 @@ inline void two_body_same_m0_gen(
     arma::Mat<Tc> D;
     build_det(X(0), Y(0), rows, cols, D);
 
-    arma::Mat<Tc> JK;
-    build_mat(XVX(0,0,0), rows, cols, JK);
-
     Tc detD;
     size_t nzero;
-    arma::Mat<Tc> adjD;
-    adjoint_matrix(D, adjD, detD, nzero);
-    adjD = adjD.t();
+    arma::Mat<Tc> cofD;
+    adjoint_matrix(D, cofD, detD, nzero);
+    cofD = cofD.t();
 
     V = V0(0) * detD;
 
-    for(size_t i=0; i<nex; i++)
-    {
-        arma::Col<Tc> v1(JK.colptr(i), nex, false, true);
-        arma::Col<Tc> v2(D.colptr(i), nex, false, true);
-        arma::Col<Tc> a(adjD.colptr(i), nex, false, true);
+    const arma::Mat<Tc> &JK = XVX(0,0,0);
 
-        V -= Tc(2.0) * (detD + arma::dot(v1-v2, a));
+    for(size_t k=0; k<nex; k++)
+    {
+        const size_t ck = cols(k);
+
+        const Tc corr = column_replacement_correction(
+            D, cofD, k,
+            [&](const size_t r) {
+                return JK(rows(r), ck);
+            });
+
+        V -= Tc(2.0) * (detD + corr);
     }
 
-    arma::field<arma::Mat<Tc> > IItmp(1);
-    arma::Mat<Tc> Dtmp2;
+    const arma::Mat<Tc> &II00 = II(0,0);
+
+    arma::Mat<Tc> Dminor;
+    arma::Mat<Tc> cof_minor;
 
     for(size_t i=0; i<nex; i++)
     for(size_t j=0; j<nex; j++)
     {
-        arma::Mat<Tc> vIItmp(
-            II(0,0).colptr(nact * rows(i) + cols(j)),
-            nact, nact, false, true);
-
-        IItmp(0) = vIItmp.submat(cols, rows).st();
-        IItmp(0).shed_row(i);
-        IItmp(0).shed_col(j);
-
-        Dtmp2 = D;
-        Dtmp2.shed_row(i);
-        Dtmp2.shed_col(j);
-
-        Tc detDtmp2;
-        size_t nzero2;
-        arma::Mat<Tc> adjDtmp2;
-        adjoint_matrix(Dtmp2, adjDtmp2, detDtmp2, nzero2);
-        adjDtmp2 = adjDtmp2.t();
-
         const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
+        const size_t r_fixed = rows(i);
+        const size_t c_fixed = cols(j);
 
-        for(size_t k=0; k<nex-1; k++)
-        {
-            arma::Col<Tc> v1(IItmp(0).colptr(k), nex-1, false, true);
-            arma::Col<Tc> v2(Dtmp2.colptr(k), nex-1, false, true);
-            arma::Col<Tc> a(adjDtmp2.colptr(k), nex-1, false, true);
+        minor_adjt(D, i, j, Dminor, cof_minor,
+            [&](const size_t lm1,
+                const arma::Mat<Tc> &det_minor,
+                const arma::Mat<Tc> &cof,
+                const Tc det_minor_val)
+            {
+                for(size_t k=0; k<lm1; k++)
+                {
+                    const Tc corr = column_replacement_correction(
+                        det_minor, cof, k,
+                        [&](const size_t r) {
+                            return two_body_same_ii_replacement(
+                                II00, nact, rows, cols,
+                                i, j, r, k, r_fixed, c_fixed);
+                        });
 
-            V += Tc(0.5 * phase) * (detDtmp2 + arma::dot(v1-v2, a));
-        }
+                    V += Tc(0.5 * phase) * (det_minor_val + corr);
+                }
+            });
     }
 }
 
@@ -168,6 +286,12 @@ inline void two_body_same_m0(
     if(nex == 1)
     {
         two_body_same_m0_l1(rows, cols, V, X, V0, XVX);
+        return;
+    }
+
+    if(nex == 2)
+    {
+        two_body_same_m0_l2(rows, cols, V, X, Y, V0, XVX, II, nact);
         return;
     }
 
