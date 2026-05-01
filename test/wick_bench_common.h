@@ -232,11 +232,11 @@ inline size_t max_cases_for(
 {
     const size_t total = bra.arank + bra.brank + ket.arank + ket.brank;
 
-    if(total <= 2) return 1000;
-    if(total <= 4) return 100;
-    if(total <= 6) return 10;
+    if(total <= 2) return 8192;
+    if(total <= 4) return 4096;
+    if(total <= 6) return 2048;
 
-    return 1;
+    return 1024;
 }
 
 /** \brief Count tensor-product cases with a maximum cap.
