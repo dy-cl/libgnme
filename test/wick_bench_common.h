@@ -335,15 +335,15 @@ inline void run_cases(
 
     std::cout << name << " cases: " << ncase << std::endl;
 
+    size_t count = 0;
+
     {
         timer t(name, &elapsed);
 
-        size_t count = 0;
-
-        for(size_t i=0; i<xa.size(); i++)
-        for(size_t j=0; j<xb.size(); j++)
-        for(size_t k=0; k<wa.size(); k++)
-        for(size_t l=0; l<wb.size(); l++)
+        for(size_t i=0; i<xa.size() && count<max_cases; i++)
+        for(size_t j=0; j<xb.size() && count<max_cases; j++)
+        for(size_t k=0; k<wa.size() && count<max_cases; k++)
+        for(size_t l=0; l<wb.size() && count<max_cases; l++)
         {
             // Copy particle-hole arrays because evaluate takes mutable references
             arma::umat xac = xa[i];
@@ -358,15 +358,12 @@ inline void run_cases(
             checksum += swick + vwick;
 
             count++;
-
-            if(count >= max_cases)
-                break;
         }
     }
 
     benchmark_record rec;
     rec.name = name;
-    rec.cases = ncase;
+    rec.cases = count;
     rec.seconds = elapsed;
     rec.checksum_delta = checksum - checksum_before;
 
