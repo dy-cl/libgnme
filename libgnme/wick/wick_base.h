@@ -6,6 +6,7 @@
 #include "wick_orbitals.h"
 #include "one_body.h"
 #include "two_body.h"
+#include "eval/scratch.h"
 
 namespace libgnme {
 
@@ -49,15 +50,25 @@ public:
     virtual ~wick_base() { }
 
 protected:
-    /** \brief Compute the overlap for a given spin sector
+    /** \brief Prepare Wick scratch for a given spin sector.
         \param xhp Particle-hole indices for bra state
         \param whp Particle-hole indices for ket state
+        \param alpha True for alpha; false for beta
+        \param work Output same-spin scratch storage
+     **/
+    void prepare_spin(
+        arma::umat xhp, arma::umat whp,
+        bool alpha,
+        wick_eval::same_scratch<Tc> &work);
+
+    /** \brief Compute the overlap for a prepared spin sector
         \param S Output overlap value
         \param alpha True for alpha; false for beta
+        \param work Prepared same-spin scratch storage
      **/
     void spin_overlap(
-        arma::umat xhp, arma::umat whp, 
-        Tc &S, bool alpha);
+        Tc &S, bool alpha,
+        wick_eval::same_scratch<Tc> &work);
 
     /** \brief Compute 1RDM for given spin sector
         \param xhp Particle-hole indices for bra state
@@ -106,35 +117,35 @@ protected:
         arma::Mat<Tc> &P1a, arma::Mat<Tc> &P1b, 
         arma::Mat<Tc> &P2ab);
 
-    /** \brief One-body coupling for a given spin sector
-        \param xhp Particle-hole indices for bra state
-        \param whp Particle-hole indices for ket state
-        \param F Output one-body coupling 
+    /** \brief One-body coupling for a prepared spin sector
+        \param F Output one-body coupling
         \param alpha True for alpha; false for beta
+        \param work Prepared same-spin scratch storage
      **/
     virtual void spin_one_body(
-        arma::umat xhp, arma::umat whp, Tc &F, bool alpha);
+        Tc &F, bool alpha,
+        wick_eval::same_scratch<Tc> &work);
 
-    /** \brief Same-spin two-body coupling 
-        \param xhp Particle-hole indices for bra state
-        \param whp Particle-hole indices for ket state
-        \param V Output two-body coupling 
+    /** \brief Same-spin two-body coupling for a prepared spin sector
+        \param V Output two-body coupling
         \param alpha True for alpha; false for beta
+        \param work Prepared same-spin scratch storage
      **/
     virtual void same_spin_two_body(
-        arma::umat xhp, arma::umat whp, Tc &V, bool alpha);
+        Tc &V, bool alpha,
+        wick_eval::same_scratch<Tc> &work);
 
-    /** \brief Different-spin two-body coupling 
-        \param xahp Alpha particle-hole indices for bra state
-        \param xbhp Beta  particle-hole indices for bra state
-        \param wahp Alpha particle-hole indices for ket state
-        \param wbhp Beta  particle-hole indices for ket state
-        \param V Output two-body coupling 
+    /** \brief Different-spin two-body coupling for prepared spin sectors
+        \param V Output two-body coupling
+        \param awork Prepared alpha same-spin scratch storage
+        \param bwork Prepared beta same-spin scratch storage
+        \param work Different-spin scratch storage
      **/
     virtual void diff_spin_two_body(
-        arma::umat xa_hp, arma::umat xb_hp, 
-        arma::umat wa_hp, arma::umat wb_hp, 
-        Tc &V);
+        Tc &V,
+        wick_eval::same_scratch<Tc> &awork,
+        wick_eval::same_scratch<Tc> &bwork,
+        wick_eval::diff_scratch<Tc> &work);
 };
 
 } // namespace libgnme

@@ -10,6 +10,86 @@
 namespace libgnme {
 namespace wick_eval {
 
+/** \brief Prepare one bra excitation index.
+    \param xhp Bra particle-hole indices.
+    \param i Bra excitation index.
+    \param p Output position.
+    \param rows Output row indices.
+    \param cols Output column indices.
+    \ingroup gnme_wick
+ **/
+inline void prepare_index_x(
+    const arma::umat &xhp,
+    const size_t i,
+    const size_t p,
+    arma::uvec &rows,
+    arma::uvec &cols)
+{
+    rows(p) = xhp(i,1);
+    cols(p) = xhp(i,0);
+}
+
+/** \brief Prepare one ket excitation index.
+    \param whp Ket particle-hole indices.
+    \param i Ket excitation index.
+    \param p Output position.
+    \param wshift Ket orbital index shift.
+    \param rows Output row indices.
+    \param cols Output column indices.
+    \ingroup gnme_wick
+ **/
+inline void prepare_index_w(
+    const arma::umat &whp,
+    const size_t i,
+    const size_t p,
+    const size_t wshift,
+    arma::uvec &rows,
+    arma::uvec &cols)
+{
+    rows(p) = whp(i,0) + wshift;
+    cols(p) = whp(i,1) + wshift;
+}
+
+/** \brief Prepare determinant indices for ranks up to four directly.
+    \param xhp Bra particle-hole indices.
+    \param whp Ket particle-hole indices.
+    \param wshift Ket orbital index shift.
+    \param rows Output row indices.
+    \param cols Output column indices.
+    \return True if the indices were prepared directly.
+    \ingroup gnme_wick
+ **/
+inline bool prepare_indices_small(
+    const arma::umat &xhp,
+    const arma::umat &whp,
+    const size_t wshift,
+    arma::uvec &rows,
+    arma::uvec &cols)
+{
+    const size_t nx = xhp.n_rows;
+    const size_t nw = whp.n_rows;
+    const size_t l = nx + nw;
+
+    if(l > 4) return false;
+
+    rows.set_size(l);
+    cols.set_size(l);
+
+    if(l == 0) return true;
+
+    if(nx > 0) prepare_index_x(xhp, 0, 0, rows, cols);
+    if(nx > 1) prepare_index_x(xhp, 1, 1, rows, cols);
+    if(nx > 2) prepare_index_x(xhp, 2, 2, rows, cols);
+    if(nx > 3) prepare_index_x(xhp, 3, 3, rows, cols);
+
+    if(nw > 0) prepare_index_w(whp, 0, nx + 0, wshift, rows, cols);
+    if(nw > 1) prepare_index_w(whp, 1, nx + 1, wshift, rows, cols);
+    if(nw > 2) prepare_index_w(whp, 2, nx + 2, wshift, rows, cols);
+    if(nw > 3) prepare_index_w(whp, 3, nx + 3, wshift, rows, cols);
+
+    return true;
+}
+
 /** \brief Prepare determinant indices into scratch storage.
     \param xhp Bra particle-hole indices.
     \param whp Ket particle-hole indices.
@@ -25,6 +105,9 @@ inline void prepare_indices(
     arma::uvec &rows,
     arma::uvec &cols)
 {
+    if(prepare_indices_small(xhp, whp, wshift, rows, cols))
+        return;
+
     const size_t nx = xhp.n_rows;
     const size_t nw = whp.n_rows;
     const size_t l = nx + nw;
@@ -33,7 +116,6 @@ inline void prepare_indices(
     cols.set_size(l);
 
     size_t p = 0;
-
     for(size_t i=0; i<nx; i++)
     {
         rows(p) = xhp(i,1);
@@ -321,89 +403,58 @@ inline void mix_dets_same(
     });
 }
 
-/** \brief Prepare different-spin scratch determinant branches.
-    \tparam Tc Matrix element type.
-    \ingroup gnme_wick
- **/
-template<typename Tc>
-inline void prepare_diff(
-    const arma::umat &xahp,
-    const arma::umat &wahp,
-    const arma::umat &xbhp,
-    const arma::umat &wbhp,
-    const size_t nactxa,
-    const size_t nactxb,
-    const size_t nza,
-    const size_t nzb,
-    const arma::field<arma::Mat<Tc> > &Xa,
-    const arma::field<arma::Mat<Tc> > &Ya,
-    const arma::field<arma::Mat<Tc> > &Xb,
-    const arma::field<arma::Mat<Tc> > &Yb,
-    arma::uvec &rowa,
-    arma::uvec &cola,
-    arma::uvec &rowb,
-    arma::uvec &colb,
-    diff_scratch<Tc> &work)
-{
-    const size_t la = xahp.n_rows + wahp.n_rows;
-    const size_t lb = xbhp.n_rows + wbhp.n_rows;
-
-    work.ensure(la, lb);
-
-    prepare_indices(xahp, wahp, nactxa, rowa, cola);
-    prepare_indices(xbhp, wbhp, nactxb, rowb, colb);
-
-    prepare_same_branch(Xa(0), Ya(0), rowa, cola, work.deta0);
-    prepare_same_branch(Xb(0), Yb(0), rowb, colb, work.detb0);
-
-    if(nza != 0)
-        prepare_same_branch(Xa(1), Ya(1), rowa, cola, work.deta1);
-
-    if(nzb != 0)
-        prepare_same_branch(Xb(1), Yb(1), rowb, colb, work.detb1);
-}
-
 /** \brief Form mixed alpha determinant incrementally.
     \tparam Tc Matrix element type.
+    \param bits Zero-distribution bitstring.
+    \param offset Bit offset for determinant columns.
+    \param same Prepared same-spin scratch storage.
+    \param work Different-spin scratch storage.
     \ingroup gnme_wick
  **/
 template<typename Tc>
 inline void mix_deta(
     const uint64_t bits,
     const size_t offset,
+    same_scratch<Tc> &same,
     diff_scratch<Tc> &work)
 {
-    const size_t l = work.deta0.n_rows;
+    const size_t l = same.rows.n_elem;
     work.deta_mix.set_size(l,l);
 
     for(size_t c=0; c<l; c++)
     {
         if(bit(bits,c+offset))
-            copy_column(work.deta1, work.deta_mix, c);
+            copy_column(same.det1, work.deta_mix, c);
         else
-            copy_column(work.deta0, work.deta_mix, c);
+            copy_column(same.det0, work.deta_mix, c);
     }
 }
 
+
 /** \brief Form mixed beta determinant incrementally.
     \tparam Tc Matrix element type.
+    \param bits Zero-distribution bitstring.
+    \param offset Bit offset for determinant columns.
+    \param same Prepared same-spin scratch storage.
+    \param work Different-spin scratch storage.
     \ingroup gnme_wick
  **/
 template<typename Tc>
 inline void mix_detb(
     const uint64_t bits,
     const size_t offset,
+    same_scratch<Tc> &same,
     diff_scratch<Tc> &work)
 {
-    const size_t l = work.detb0.n_rows;
+    const size_t l = same.rows.n_elem;
     work.detb_mix.set_size(l,l);
 
     for(size_t c=0; c<l; c++)
     {
         if(bit(bits,c+offset))
-            copy_column(work.detb1, work.detb_mix, c);
+            copy_column(same.det1, work.detb_mix, c);
         else
-            copy_column(work.detb0, work.detb_mix, c);
+            copy_column(same.det0, work.detb_mix, c);
     }
 }
 

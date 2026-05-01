@@ -243,42 +243,27 @@ inline void one_body_gen(
     });
 }
 
-/** \brief Evaluate one-body same-spin contribution using Wick contractions.
+/** \brief Evaluate one-body same-spin contribution using prepared Wick contractions.
     \tparam Tc Matrix element type.
-    \param xhp Particle-hole indices for bra state.
-    \param whp Particle-hole indices for ket state.
     \param F Output one-body matrix element.
     \param nz Number of zero-overlap orbital pairs.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
     \param F0 Zeroth-order one-body contractions.
     \param XFX First-order one-body contractions.
-    \param wshift Ket orbital index shift.
+    \param work Prepared same-spin scratch storage.
     \ingroup gnme_wick
  **/
 template<typename Tc>
 inline void spin_one_body(
-    arma::umat xhp, arma::umat whp,
     Tc &F,
     const size_t &nz,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y,
     const arma::Col<Tc> &F0,
     const arma::field<arma::Mat<Tc> > &XFX,
-    const size_t &wshift)
+    same_scratch<Tc> &work)
 {
     F = Tc(0.0);
 
-    const size_t nx = xhp.n_rows;
-    const size_t nw = whp.n_rows;
-    const size_t nex = nx + nw;
-
+    const size_t nex = work.rows.n_elem;
     if(nz > nex + 1) return;
-
-    scratch<Tc> &store = local_scratch<Tc>();
-    same_scratch<Tc> &work = store.aa;
-
-    prepare_same(xhp, whp, wshift, nz, X, Y, work);
 
     const arma::uvec &rows = work.rows;
     const arma::uvec &cols = work.cols;

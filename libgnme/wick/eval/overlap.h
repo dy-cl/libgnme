@@ -128,38 +128,23 @@ inline Tc overlap_gen(
     return S;
 }
 
-/** \brief Evaluate same-spin overlap contribution using Wick contractions.
+/** \brief Evaluate same-spin overlap contribution using prepared Wick contractions.
     \tparam Tc Matrix element type.
-    \param xhp Particle-hole indices for bra state.
-    \param whp Particle-hole indices for ket state.
     \param S Output overlap.
     \param nz Number of zero-overlap orbital pairs.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
-    \param wshift Ket orbital index shift.
+    \param work Prepared same-spin scratch storage.
     \ingroup gnme_wick
  **/
 template<typename Tc>
 inline void spin_overlap(
-    arma::umat xhp, arma::umat whp,
     Tc &S,
     const size_t &nz,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y,
-    const size_t &wshift)
+    same_scratch<Tc> &work)
 {
     S = Tc(0.0);
 
-    const size_t nx = xhp.n_rows;
-    const size_t nw = whp.n_rows;
-    const size_t nex = nx + nw;
-
+    const size_t nex = work.rows.n_elem;
     if(nz > nex) return;
-
-    scratch<Tc> &store = local_scratch<Tc>();
-    same_scratch<Tc> &work = store.aa;
-
-    prepare_same(xhp, whp, wshift, nz, X, Y, work);
 
     if(nz == 0)
     {

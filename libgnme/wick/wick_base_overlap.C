@@ -7,19 +7,26 @@
 namespace libgnme {
 
 template<typename Tc, typename Tf, typename Tb>
-void wick_base<Tc,Tf,Tb>::spin_overlap(
+void wick_base<Tc,Tf,Tb>::prepare_spin(
     arma::umat xhp, arma::umat whp,
-    Tc &S, bool alpha)
+    bool alpha,
+    wick_eval::same_scratch<Tc> &work)
 {
     const size_t &nz = alpha ? m_orba.m_nz : m_orbb.m_nz;
     const size_t &wshift = alpha ? m_orba.m_refx.m_nact : m_orbb.m_refx.m_nact;
-
     const arma::field<arma::Mat<Tc> > &X = alpha ? m_orba.m_X : m_orbb.m_X;
     const arma::field<arma::Mat<Tc> > &Y = alpha ? m_orba.m_Y : m_orbb.m_Y;
 
-    wick_eval::spin_overlap(xhp, whp, S, nz, X, Y, wshift);
+    wick_eval::prepare_same(xhp, whp, wshift, nz, X, Y, work);
+}
 
-    return;
+template<typename Tc, typename Tf, typename Tb>
+void wick_base<Tc,Tf,Tb>::spin_overlap(
+    Tc &S, bool alpha,
+    wick_eval::same_scratch<Tc> &work)
+{
+    const size_t &nz = alpha ? m_orba.m_nz : m_orbb.m_nz;
+    wick_eval::spin_overlap(S, nz, work);
 }
 
 template class wick_base<double, double, double>;

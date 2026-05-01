@@ -503,6 +503,122 @@ inline Tc mixed_minor_det(
     return det(Dminor);
 }
 
+/** \brief Read one alpha-beta two-electron replacement entry.
+    \tparam Tc Matrix element type.
+    \param IIab Alpha-beta two-electron intermediate field.
+    \param nacta Total alpha active dimension.
+    \param nactb Total beta active dimension.
+    \param ma0 Alpha first branch selector.
+    \param maj Alpha second branch selector.
+    \param mb0 Beta first branch selector.
+    \param mbj Beta second branch selector.
+    \param ar Alpha row index.
+    \param ac Alpha column index.
+    \param br Beta row index.
+    \param bc Beta column index.
+    \return Two-electron replacement entry.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline Tc two_body_diff_iiab(
+    const arma::field<arma::Mat<Tc> > &IIab,
+    const size_t nacta,
+    const size_t nactb,
+    const size_t ma0, const size_t maj,
+    const size_t mb0, const size_t mbj,
+    const size_t ar, const size_t ac,
+    const size_t br, const size_t bc)
+{
+    const arma::Mat<Tc> &M = IIab(two_body_pair(ma0,maj), two_body_pair(mb0,mbj));
+
+    const size_t row = ac + nacta * ar;
+    const size_t col = nactb * br + bc;
+
+    return M(row,col);
+}
+
+/** \brief Read one same-spin two-electron replacement entry.
+    \tparam Tc Matrix element type.
+    \param II Same-spin two-electron intermediate field.
+    \param nact Total active dimension.
+    \param mi First branch selector.
+    \param mj Second branch selector.
+    \param mk Third branch selector.
+    \param ml Fourth branch selector.
+    \param r0 Fixed row index.
+    \param c0 Fixed column index.
+    \param r1 Replacement row index.
+    \param c1 Replacement column index.
+    \return Two-electron replacement entry.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline Tc two_body_same_ii(
+    const arma::field<arma::Mat<Tc> > &II,
+    const size_t nact,
+    const size_t mi, const size_t mj,
+    const size_t mk, const size_t ml,
+    const size_t r0, const size_t c0,
+    const size_t r1, const size_t c1)
+{
+    size_t p = two_body_pair(mi, mj);
+    size_t q = two_body_pair(mk, ml);
+
+    bool transpose;
+    two_body_same_canonical(p, q, transpose);
+
+    const arma::Mat<Tc> &M = II(p,q);
+
+    const size_t col = nact * r0 + c0;
+    const size_t row = c1 + nact * r1;
+
+    return transpose ? M(col,row) : M(row,col);
+}
+
+/** \brief Read one same-spin II replacement entry for a determinant minor.
+    \tparam Tc Matrix element type.
+    \param II Same-spin two-electron intermediate field.
+    \param nact Total active dimension.
+    \param mi First branch selector.
+    \param mj Second branch selector.
+    \param mk Third branch selector.
+    \param ml Fourth branch selector.
+    \param rows Full determinant row labels.
+    \param cols Full determinant column labels.
+    \param row_rm Removed row in the full determinant.
+    \param col_rm Removed column in the full determinant.
+    \param r_minor Row index in the minor.
+    \param k_minor Column index in the minor.
+    \param r_fixed Fixed first row label.
+    \param c_fixed Fixed first column label.
+    \return Replacement entry.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline Tc two_body_same_ii_replacement(
+    const arma::field<arma::Mat<Tc> > &II,
+    const size_t nact,
+    const size_t mi, const size_t mj,
+    const size_t mk, const size_t ml,
+    const arma::uvec &rows,
+    const arma::uvec &cols,
+    const size_t row_rm,
+    const size_t col_rm,
+    const size_t r_minor,
+    const size_t k_minor,
+    const size_t r_fixed,
+    const size_t c_fixed)
+{
+    const size_t r_full = minor_to_full(r_minor, row_rm);
+    const size_t k_full = minor_to_full(k_minor, col_rm);
+
+    return two_body_same_ii(
+        II, nact,
+        mi, mj, mk, ml,
+        r_fixed, c_fixed,
+        rows(r_full), cols(k_full));
+}
+
 } // namespace wick_eval
 } // namespace libgnme
 
