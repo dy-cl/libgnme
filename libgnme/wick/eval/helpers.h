@@ -463,6 +463,46 @@ inline void minor_adjt(
     f(lm1, Dminor, cof_minor, det_minor);
 }
 
+/** \brief Build a mixed determinant minor and return its determinant.
+    \tparam Tc Matrix element type.
+    \param D Non-zero-overlap branch determinant.
+    \param Db Zero-overlap branch determinant.
+    \param bits Zero-distribution bitstring.
+    \param offset Offset into bitstring for determinant columns.
+    \param row_rm Removed row.
+    \param col_rm Removed column.
+    \param Dminor Scratch determinant minor.
+    \return Determinant of the mixed minor.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline Tc mixed_minor_det(
+    const arma::Mat<Tc> &D,
+    const arma::Mat<Tc> &Db,
+    const uint64_t bits,
+    const size_t offset,
+    const size_t row_rm,
+    const size_t col_rm,
+    arma::Mat<Tc> &Dminor)
+{
+    const size_t l = D.n_rows;
+    const size_t lm1 = l - 1;
+
+    Dminor.set_size(lm1,lm1);
+
+    for(size_t j=0; j<lm1; j++)
+    for(size_t i=0; i<lm1; i++)
+    {
+        const size_t fi = minor_to_full(i,row_rm);
+        const size_t fj = minor_to_full(j,col_rm);
+        const arma::Mat<Tc> &src = bit(bits,j+offset) ? Db : D;
+
+        Dminor(i,j) = src(fi,fj);
+    }
+
+    return det(Dminor);
+}
+
 } // namespace wick_eval
 } // namespace libgnme
 

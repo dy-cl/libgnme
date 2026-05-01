@@ -45,44 +45,478 @@ inline Tc two_body_diff_iiab(
     return M(row,col);
 }
 
-/** \brief Build a mixed determinant minor and return its determinant.
+/** \brief Evaluate different-spin two-body matrix element for nza = nzb = 0 and no excitations.
     \tparam Tc Matrix element type.
-    \param D Non-zero-overlap branch determinant.
-    \param Db Zero-overlap branch determinant.
-    \param bits Zero-distribution bitstring.
-    \param offset Offset into bitstring for determinant columns.
-    \param row_rm Removed row.
-    \param col_rm Removed column.
-    \param Dminor Scratch determinant minor.
-    \return Determinant of the mixed minor.
+    \param V Output two-body matrix element.
+    \param Vab Zeroth-order alpha-beta contractions.
     \ingroup gnme_wick
  **/
 template<typename Tc>
-inline Tc mixed_minor_det(
-    const arma::Mat<Tc> &D,
-    const arma::Mat<Tc> &Db,
-    const uint64_t bits,
-    const size_t offset,
-    const size_t row_rm,
-    const size_t col_rm,
-    arma::Mat<Tc> &Dminor)
+inline void two_body_diff_m0_00(Tc &V, const arma::Mat<Tc> &Vab)
 {
-    const size_t l = D.n_rows;
-    const size_t lm1 = l - 1;
+    V = Vab(0,0);
+}
 
-    Dminor.set_size(lm1,lm1);
+/** \brief Evaluate different-spin two-body matrix element for nza = nzb = 0 and la = lb = 1.
+    \tparam Tc Matrix element type.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void two_body_diff_m0_11(
+    const arma::uvec &rowa, const arma::uvec &cola,
+    const arma::uvec &rowb, const arma::uvec &colb,
+    Tc &V,
+    const arma::field<arma::Mat<Tc> > &Xa,
+    const arma::field<arma::Mat<Tc> > &Xb,
+    const arma::Mat<Tc> &Vab,
+    const arma::field<arma::Mat<Tc> > &XVaXb,
+    const arma::field<arma::Mat<Tc> > &XVbXa,
+    arma::field<arma::Mat<Tc> > &IIab,
+    const size_t nacta,
+    const size_t nactb)
+{
+    const size_t ra = rowa(0);
+    const size_t ca = cola(0);
+    const size_t rb = rowb(0);
+    const size_t cb = colb(0);
 
-    for(size_t j=0; j<lm1; j++)
-    for(size_t i=0; i<lm1; i++)
+    const Tc deta = Xa(0)(ra,ca);
+    const Tc detb = Xb(0)(rb,cb);
+
+    V = Vab(0,0) * deta * detb
+      - XVbXa(0,0,0)(ra,ca) * detb
+      - XVaXb(0,0,0)(rb,cb) * deta
+      + two_body_diff_iiab(
+            IIab, nacta, nactb,
+            0, 0, 0, 0,
+            ra, ca, rb, cb);
+}
+
+/** \brief Evaluate different-spin two-body matrix element for nza = nzb = 0 and la = 1, lb = 3.
+    \tparam Tc Matrix element type.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void two_body_diff_m0_13(
+    const arma::uvec &rowa, const arma::uvec &cola,
+    const arma::uvec &rowb, const arma::uvec &colb,
+    Tc &V,
+    const arma::field<arma::Mat<Tc> > &Xa,
+    const arma::field<arma::Mat<Tc> > &Xb,
+    const arma::field<arma::Mat<Tc> > &Yb,
+    const arma::Mat<Tc> &Vab,
+    const arma::field<arma::Mat<Tc> > &XVaXb,
+    const arma::field<arma::Mat<Tc> > &XVbXa,
+    arma::field<arma::Mat<Tc> > &IIab,
+    const size_t nacta,
+    const size_t nactb)
+{
+    const size_t ra = rowa(0);
+    const size_t ca = cola(0);
+
+    const Tc deta = Xa(0)(ra,ca);
+
+    arma::Mat<Tc> Db;
+    build_det(Xb(0), Yb(0), rowb, colb, Db);
+
+    arma::Mat<Tc> cofB;
+    const Tc detb = adjugate_transpose(Db, cofB);
+
+    const Tc alpha_repl = XVbXa(0,0,0)(ra,ca);
+
+    Tc beta_repl = Tc(0.0);
+    Tc ii_repl = Tc(0.0);
+
+    for(size_t k=0; k<3; k++)
     {
-        const size_t fi = minor_to_full(i,row_rm);
-        const size_t fj = minor_to_full(j,col_rm);
-        const arma::Mat<Tc> &src = bit(bits,j+offset) ? Db : D;
+        const size_t cb = colb(k);
 
-        Dminor(i,j) = src(fi,fj);
+        for(size_t r=0; r<3; r++)
+        {
+            const size_t rb = rowb(r);
+
+            beta_repl += cofB(r,k) * XVaXb(0,0,0)(rb,cb);
+
+            ii_repl += cofB(r,k) * two_body_diff_iiab(
+                IIab, nacta, nactb,
+                0, 0, 0, 0,
+                ra, ca, rb, cb);
+        }
     }
 
-    return det(Dminor);
+    V = Vab(0,0) * deta * detb
+      - alpha_repl * detb
+      - deta * beta_repl
+      + ii_repl;
+}
+
+/** \brief Evaluate different-spin two-body matrix element for nza = nzb = 0 and la = 3, lb = 1.
+    \tparam Tc Matrix element type.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void two_body_diff_m0_31(
+    const arma::uvec &rowa, const arma::uvec &cola,
+    const arma::uvec &rowb, const arma::uvec &colb,
+    Tc &V,
+    const arma::field<arma::Mat<Tc> > &Xa,
+    const arma::field<arma::Mat<Tc> > &Ya,
+    const arma::field<arma::Mat<Tc> > &Xb,
+    const arma::Mat<Tc> &Vab,
+    const arma::field<arma::Mat<Tc> > &XVaXb,
+    const arma::field<arma::Mat<Tc> > &XVbXa,
+    arma::field<arma::Mat<Tc> > &IIab,
+    const size_t nacta,
+    const size_t nactb)
+{
+    const size_t rb = rowb(0);
+    const size_t cb = colb(0);
+
+    const Tc detb = Xb(0)(rb,cb);
+
+    arma::Mat<Tc> Da;
+    build_det(Xa(0), Ya(0), rowa, cola, Da);
+
+    arma::Mat<Tc> cofA;
+    const Tc deta = adjugate_transpose(Da, cofA);
+
+    const Tc beta_repl = XVaXb(0,0,0)(rb,cb);
+
+    Tc alpha_repl = Tc(0.0);
+    Tc ii_repl = Tc(0.0);
+
+    for(size_t k=0; k<3; k++)
+    {
+        const size_t ca = cola(k);
+
+        for(size_t r=0; r<3; r++)
+        {
+            const size_t ra = rowa(r);
+
+            alpha_repl += cofA(r,k) * XVbXa(0,0,0)(ra,ca);
+
+            ii_repl += cofA(r,k) * two_body_diff_iiab(
+                IIab, nacta, nactb,
+                0, 0, 0, 0,
+                ra, ca, rb, cb);
+        }
+    }
+
+    V = Vab(0,0) * deta * detb
+      - alpha_repl * detb
+      - beta_repl * deta
+      + ii_repl;
+}
+
+/** \brief Evaluate different-spin two-body matrix element for nza = nzb = 0 and la = lb = 2.
+    \tparam Tc Matrix element type.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void two_body_diff_m0_22(
+    const arma::uvec &rowa, const arma::uvec &cola,
+    const arma::uvec &rowb, const arma::uvec &colb,
+    Tc &V,
+    const arma::field<arma::Mat<Tc> > &Xa,
+    const arma::field<arma::Mat<Tc> > &Ya,
+    const arma::field<arma::Mat<Tc> > &Xb,
+    const arma::field<arma::Mat<Tc> > &Yb,
+    const arma::Mat<Tc> &Vab,
+    const arma::field<arma::Mat<Tc> > &XVaXb,
+    const arma::field<arma::Mat<Tc> > &XVbXa,
+    arma::field<arma::Mat<Tc> > &IIab,
+    const size_t nacta,
+    const size_t nactb)
+{
+    arma::Mat<Tc> Da;
+    arma::Mat<Tc> Db;
+
+    build_det(Xa(0), Ya(0), rowa, cola, Da);
+    build_det(Xb(0), Yb(0), rowb, colb, Db);
+
+    arma::Mat<Tc> cofA;
+    arma::Mat<Tc> cofB;
+
+    const Tc deta = adjugate_transpose(Da, cofA);
+    const Tc detb = adjugate_transpose(Db, cofB);
+
+    Tc alpha_repl = Tc(0.0);
+    Tc beta_repl = Tc(0.0);
+
+    for(size_t k=0; k<2; k++)
+    {
+        const size_t ca = cola(k);
+
+        for(size_t r=0; r<2; r++)
+            alpha_repl += cofA(r,k) * XVbXa(0,0,0)(rowa(r),ca);
+    }
+
+    for(size_t k=0; k<2; k++)
+    {
+        const size_t cb = colb(k);
+
+        for(size_t r=0; r<2; r++)
+            beta_repl += cofB(r,k) * XVaXb(0,0,0)(rowb(r),cb);
+    }
+
+    Tc ii_repl = Tc(0.0);
+
+    for(size_t ia=0; ia<2; ia++)
+    for(size_t ja=0; ja<2; ja++)
+    {
+        const size_t ra = rowa(ia);
+        const size_t ca = cola(ja);
+        const Tc cofa = cofA(ia,ja);
+
+        for(size_t kb=0; kb<2; kb++)
+        {
+            const size_t cb = colb(kb);
+
+            for(size_t rb_i=0; rb_i<2; rb_i++)
+            {
+                const size_t rb = rowb(rb_i);
+
+                ii_repl += Tc(0.5) * cofa * cofB(rb_i,kb) *
+                    two_body_diff_iiab(
+                        IIab, nacta, nactb,
+                        0, 0, 0, 0,
+                        ra, ca, rb, cb);
+            }
+        }
+    }
+
+    for(size_t ib=0; ib<2; ib++)
+    for(size_t jb=0; jb<2; jb++)
+    {
+        const size_t rb = rowb(ib);
+        const size_t cb = colb(jb);
+        const Tc cofb = cofB(ib,jb);
+
+        for(size_t ka=0; ka<2; ka++)
+        {
+            const size_t ca = cola(ka);
+
+            for(size_t ra_i=0; ra_i<2; ra_i++)
+            {
+                const size_t ra = rowa(ra_i);
+
+                ii_repl += Tc(0.5) * cofb * cofA(ra_i,ka) *
+                    two_body_diff_iiab(
+                        IIab, nacta, nactb,
+                        0, 0, 0, 0,
+                        ra, ca, rb, cb);
+            }
+        }
+    }
+
+    V = Vab(0,0) * deta * detb
+      - alpha_repl * detb
+      - beta_repl * deta
+      + ii_repl;
+}
+
+/** \brief Evaluate different-spin two-body matrix element for nza = nzb = 0 and arbitrary ranks.
+    \tparam Tc Matrix element type.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void two_body_diff_m0_gen(
+    const arma::uvec &rowa, const arma::uvec &cola,
+    const arma::uvec &rowb, const arma::uvec &colb,
+    Tc &V,
+    const arma::field<arma::Mat<Tc> > &Xa,
+    const arma::field<arma::Mat<Tc> > &Ya,
+    const arma::field<arma::Mat<Tc> > &Xb,
+    const arma::field<arma::Mat<Tc> > &Yb,
+    const arma::Mat<Tc> &Vab,
+    const arma::field<arma::Mat<Tc> > &XVaXb,
+    const arma::field<arma::Mat<Tc> > &XVbXa,
+    arma::field<arma::Mat<Tc> > &IIab,
+    const size_t nacta,
+    const size_t nactb)
+{
+    const size_t la = rowa.n_elem;
+    const size_t lb = rowb.n_elem;
+
+    arma::Mat<Tc> Da, Db;
+    arma::Mat<Tc> cofA, cofB;
+
+    Tc deta;
+    Tc detb;
+
+    if(la == 0)
+    {
+        Da.set_size(0,0);
+        cofA.set_size(0,0);
+        deta = Tc(1.0);
+    }
+    else
+    {
+        build_det(Xa(0), Ya(0), rowa, cola, Da);
+        deta = adjugate_transpose(Da, cofA);
+    }
+
+    if(lb == 0)
+    {
+        Db.set_size(0,0);
+        cofB.set_size(0,0);
+        detb = Tc(1.0);
+    }
+    else
+    {
+        build_det(Xb(0), Yb(0), rowb, colb, Db);
+        detb = adjugate_transpose(Db, cofB);
+    }
+
+    V = Vab(0,0) * deta * detb;
+
+    for(size_t k=0; k<la; k++)
+    {
+        const size_t ca = cola(k);
+
+        const Tc corr = column_replacement_correction(
+            Da, cofA, k,
+            [&](const size_t r) {
+                return XVbXa(0,0,0)(rowa(r),ca);
+            });
+
+        V -= (deta + corr) * detb;
+    }
+
+    for(size_t k=0; k<lb; k++)
+    {
+        const size_t cb = colb(k);
+
+        const Tc corr = column_replacement_correction(
+            Db, cofB, k,
+            [&](const size_t r) {
+                return XVaXb(0,0,0)(rowb(r),cb);
+            });
+
+        V -= (detb + corr) * deta;
+    }
+
+    arma::Mat<Tc> minorD;
+
+    for(size_t i=0; i<la; i++)
+    for(size_t j=0; j<la; j++)
+    {
+        const Tc detDa2 = mixed_minor_det(Da, Da, 0, 0, i, j, minorD);
+        const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
+
+        for(size_t k=0; k<lb; k++)
+        {
+            const size_t cb = colb(k);
+
+            const Tc corr = column_replacement_correction(
+                Db, cofB, k,
+                [&](const size_t r) {
+                    return two_body_diff_iiab(
+                        IIab, nacta, nactb,
+                        0, 0, 0, 0,
+                        rowa(i), cola(j),
+                        rowb(r), cb);
+                });
+
+            V += Tc(0.5 * phase) * (detb + corr) * detDa2;
+        }
+    }
+
+    for(size_t i=0; i<lb; i++)
+    for(size_t j=0; j<lb; j++)
+    {
+        const Tc detDb2 = mixed_minor_det(Db, Db, 0, 0, i, j, minorD);
+        const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
+
+        for(size_t k=0; k<la; k++)
+        {
+            const size_t ca = cola(k);
+
+            const Tc corr = column_replacement_correction(
+                Da, cofA, k,
+                [&](const size_t r) {
+                    return two_body_diff_iiab(
+                        IIab, nacta, nactb,
+                        0, 0, 0, 0,
+                        rowa(r), ca,
+                        rowb(i), colb(j));
+                });
+
+            V += Tc(0.5 * phase) * (deta + corr) * detDb2;
+        }
+    }
+}
+
+/** \brief Dispatch different-spin two-body matrix element for nza = nzb = 0.
+    \tparam Tc Matrix element type.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void two_body_diff_m0(
+    const arma::uvec &rowa, const arma::uvec &cola,
+    const arma::uvec &rowb, const arma::uvec &colb,
+    Tc &V,
+    const arma::field<arma::Mat<Tc> > &Xa,
+    const arma::field<arma::Mat<Tc> > &Ya,
+    const arma::field<arma::Mat<Tc> > &Xb,
+    const arma::field<arma::Mat<Tc> > &Yb,
+    const arma::Mat<Tc> &Vab,
+    const arma::field<arma::Mat<Tc> > &XVaXb,
+    const arma::field<arma::Mat<Tc> > &XVbXa,
+    arma::field<arma::Mat<Tc> > &IIab,
+    const size_t nacta,
+    const size_t nactb)
+{
+    const size_t la = rowa.n_elem;
+    const size_t lb = rowb.n_elem;
+
+    if(la == 0 && lb == 0)
+    {
+        two_body_diff_m0_00(V, Vab);
+        return;
+    }
+
+    if(la == 1 && lb == 1)
+    {
+        two_body_diff_m0_11(
+            rowa, cola, rowb, colb, V,
+            Xa, Xb, Vab, XVaXb, XVbXa, IIab,
+            nacta, nactb);
+        return;
+    }
+
+    if(la == 1 && lb == 3)
+    {
+        two_body_diff_m0_13(
+            rowa, cola, rowb, colb, V,
+            Xa, Xb, Yb, Vab, XVaXb, XVbXa, IIab,
+            nacta, nactb);
+        return;
+    }
+
+    if(la == 2 && lb == 2)
+    {
+        two_body_diff_m0_22(
+            rowa, cola, rowb, colb, V,
+            Xa, Ya, Xb, Yb, Vab, XVaXb, XVbXa, IIab,
+            nacta, nactb);
+        return;
+    }
+
+    if(la == 3 && lb == 1)
+    {
+        two_body_diff_m0_31(
+            rowa, cola, rowb, colb, V,
+            Xa, Ya, Xb, Vab, XVaXb, XVbXa, IIab,
+            nacta, nactb);
+        return;
+    }
+
+    two_body_diff_m0_gen(
+        rowa, cola, rowb, colb, V,
+        Xa, Ya, Xb, Yb,
+        Vab, XVaXb, XVbXa, IIab,
+        nacta, nactb);
 }
 
 /** \brief Evaluate different-spin two-body matrix element for the generic branch.
@@ -359,6 +793,16 @@ inline void two_body_diff(
 
     const size_t nacta = nactxa + nactwa;
     const size_t nactb = nactxb + nactwb;
+
+    if(nza == 0 && nzb == 0)
+    {
+        two_body_diff_m0(
+            rowa, cola, rowb, colb, V,
+            Xa, Ya, Xb, Yb,
+            Vab, XVaXb, XVbXa, IIab,
+            nacta, nactb);
+        return;
+    }
 
     two_body_diff_gen(
         rowa, cola, rowb, colb, V,

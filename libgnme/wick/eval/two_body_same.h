@@ -186,6 +186,93 @@ inline void two_body_same_m0_l2(
     V = V0(0) * detD - Tc(2.0) * (det_c0 + det_c1) + Tc(0.5) * iiterm;
 }
 
+/** \brief Evaluate same-spin two-body matrix element for nz = 0 and three excitations.
+    \tparam Tc Matrix element type.
+    \param rows Row indices.
+    \param cols Column indices.
+    \param V Output two-body matrix element.
+    \param X Lower-triangular contractions.
+    \param Y Upper-triangular contractions.
+    \param V0 Zeroth-order same-spin two-body contractions.
+    \param XVX First-order same-spin two-body contractions.
+    \param II Same-spin two-electron intermediates.
+    \param nact Total active dimension for flattened two-electron intermediates.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void two_body_same_m0_l3(
+    const arma::uvec &rows, const arma::uvec &cols,
+    Tc &V,
+    const arma::field<arma::Mat<Tc> > &X,
+    const arma::field<arma::Mat<Tc> > &Y,
+    const arma::Col<Tc> &V0,
+    const arma::field<arma::Mat<Tc> > &XVX,
+    arma::field<arma::Mat<Tc> > &II,
+    const size_t nact)
+{
+    arma::Mat<Tc> D;
+    build_det(X(0), Y(0), rows, cols, D);
+
+    arma::Mat<Tc> cofD;
+    const Tc detD = adjugate_transpose(D, cofD);
+
+    V = V0(0) * detD;
+
+    const arma::Mat<Tc> &JK = XVX(0,0,0);
+
+    for(size_t k=0; k<3; k++)
+    {
+        const size_t ck = cols(k);
+
+        const Tc repl =
+              cofD(0,k) * JK(rows(0),ck)
+            + cofD(1,k) * JK(rows(1),ck)
+            + cofD(2,k) * JK(rows(2),ck);
+
+        V -= Tc(2.0) * repl;
+    }
+
+    const arma::field<arma::Mat<Tc> > &IIfield = II;
+
+    for(size_t i=0; i<3; i++)
+    for(size_t j=0; j<3; j++)
+    {
+        const size_t r0 = minor_to_full(0, i);
+        const size_t r1 = minor_to_full(1, i);
+        const size_t c0 = minor_to_full(0, j);
+        const size_t c1 = minor_to_full(1, j);
+
+        const Tc a00 = D(r0,c0);
+        const Tc a01 = D(r0,c1);
+        const Tc a10 = D(r1,c0);
+        const Tc a11 = D(r1,c1);
+
+        const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
+
+        const size_t rf = rows(i);
+        const size_t cf = cols(j);
+
+        const Tc x00 = two_body_same_ii(
+            IIfield, nact, 0, 0, 0, 0,
+            rf, cf, rows(r0), cols(c0));
+
+        const Tc x10 = two_body_same_ii(
+            IIfield, nact, 0, 0, 0, 0,
+            rf, cf, rows(r1), cols(c0));
+
+        const Tc x01 = two_body_same_ii(
+            IIfield, nact, 0, 0, 0, 0,
+            rf, cf, rows(r0), cols(c1));
+
+        const Tc x11 = two_body_same_ii(
+            IIfield, nact, 0, 0, 0, 0,
+            rf, cf, rows(r1), cols(c1));
+
+        V += Tc(0.5 * phase) * (x00 * a11 - a01 * x10);
+        V += Tc(0.5 * phase) * (a00 * x11 - x01 * a10);
+    }
+}
+
 /** \brief Evaluate same-spin two-body matrix element for nz = 0 and arbitrary excitation rank.
     \tparam Tc Matrix element type.
     \param rows Row indices.
@@ -310,6 +397,12 @@ inline void two_body_same_m0(
     if(nex == 2)
     {
         two_body_same_m0_l2(rows, cols, V, X, Y, V0, XVX, II, nact);
+        return;
+    }
+
+    if(nex == 3)
+    {
+        two_body_same_m0_l3(rows, cols, V, X, Y, V0, XVX, II, nact);
         return;
     }
 
