@@ -6,184 +6,123 @@
 
 #include "helpers.h"
 #include "prepare.h"
+#include "scratch.h"
+#include "prepare_scratch.h"
 
 namespace libgnme {
 namespace wick_eval {
 
-/** \brief Evaluate a one-column overlap determinant.
+/** \brief Evaluate a prepared overlap determinant for l = 0.
     \tparam Tc Matrix element type.
-    \param X Lower-triangular contractions.
-    \param rows Row indices.
-    \param cols Column indices.
     \return Overlap determinant.
     \ingroup gnme_wick
  **/
 template<typename Tc>
-inline Tc overlap_l1(
-    const arma::Mat<Tc> &X,
-    const arma::uvec &rows, const arma::uvec &cols)
+inline Tc overlap_l0()
 {
-    return X(rows(0),cols(0));
+    return Tc(1.0);
 }
 
-/** \brief Evaluate a two-column overlap determinant.
+/** \brief Evaluate a prepared overlap determinant for l = 1.
     \tparam Tc Matrix element type.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
-    \param rows Row indices.
-    \param cols Column indices.
+    \param D Prepared determinant matrix.
     \return Overlap determinant.
     \ingroup gnme_wick
  **/
 template<typename Tc>
-inline Tc overlap_l2(
-    const arma::Mat<Tc> &X, const arma::Mat<Tc> &Y,
-    const arma::uvec &rows, const arma::uvec &cols)
+inline Tc overlap_l1(const arma::Mat<Tc> &D)
 {
-    const size_t r0 = rows(0);
-    const size_t r1 = rows(1);
-    const size_t c0 = cols(0);
-    const size_t c1 = cols(1);
-
-    const Tc a00 = X(r0,c0);
-    const Tc a01 = Y(r0,c1);
-    const Tc a10 = X(r1,c0);
-    const Tc a11 = X(r1,c1);
-
-    return a00 * a11 - a01 * a10;
+    return D(0,0);
 }
 
-/** \brief Evaluate a three-column overlap determinant.
+/** \brief Evaluate a prepared overlap determinant for l = 2.
     \tparam Tc Matrix element type.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
-    \param rows Row indices.
-    \param cols Column indices.
+    \param D Prepared determinant matrix.
     \return Overlap determinant.
     \ingroup gnme_wick
  **/
 template<typename Tc>
-inline Tc overlap_l3(
-    const arma::Mat<Tc> &X, const arma::Mat<Tc> &Y,
-    const arma::uvec &rows, const arma::uvec &cols)
+inline Tc overlap_l2(const arma::Mat<Tc> &D)
 {
-    const size_t r0 = rows(0);
-    const size_t r1 = rows(1);
-    const size_t r2 = rows(2);
-    const size_t c0 = cols(0);
-    const size_t c1 = cols(1);
-    const size_t c2 = cols(2);
-
-    const Tc a00 = X(r0,c0);
-    const Tc a01 = Y(r0,c1);
-    const Tc a02 = Y(r0,c2);
-
-    const Tc a10 = X(r1,c0);
-    const Tc a11 = X(r1,c1);
-    const Tc a12 = Y(r1,c2);
-
-    const Tc a20 = X(r2,c0);
-    const Tc a21 = X(r2,c1);
-    const Tc a22 = X(r2,c2);
-
-    return a00 * (a11 * a22 - a12 * a21)
-         - a01 * (a10 * a22 - a12 * a20)
-         + a02 * (a10 * a21 - a11 * a20);
+    return det2_scalar(D(0,0), D(0,1), D(1,0), D(1,1));
 }
 
-/** \brief Evaluate an overlap determinant for one contraction branch.
+/** \brief Evaluate a prepared overlap determinant for l = 3.
     \tparam Tc Matrix element type.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
-    \param rows Row indices.
-    \param cols Column indices.
+    \param D Prepared determinant matrix.
     \return Overlap determinant.
     \ingroup gnme_wick
  **/
 template<typename Tc>
-inline Tc overlap_branch(
-    const arma::Mat<Tc> &X, const arma::Mat<Tc> &Y,
-    const arma::uvec &rows, const arma::uvec &cols)
+inline Tc overlap_l3(const arma::Mat<Tc> &D)
 {
-    const size_t nex = rows.n_elem;
+    return det3_scalar(
+        D(0,0), D(0,1), D(0,2),
+        D(1,0), D(1,1), D(1,2),
+        D(2,0), D(2,1), D(2,2));
+}
 
-    if(nex == 0) return Tc(1.0);
-    if(nex == 1) return overlap_l1(X, rows, cols);
-    if(nex == 2) return overlap_l2(X, Y, rows, cols);
-    if(nex == 3) return overlap_l3(X, Y, rows, cols);
+/** \brief Evaluate a prepared overlap determinant.
+    \tparam Tc Matrix element type.
+    \param D Prepared determinant matrix.
+    \return Overlap determinant.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline Tc overlap_det(const arma::Mat<Tc> &D)
+{
+    const size_t nex = D.n_rows;
 
-    arma::Mat<Tc> D;
-    build_det(X, Y, rows, cols, D);
+    if(nex == 0) return overlap_l0<Tc>();
+    if(nex == 1) return overlap_l1(D);
+    if(nex == 2) return overlap_l2(D);
+    if(nex == 3) return overlap_l3(D);
+
     return det(D);
 }
 
 /** \brief Evaluate same-spin overlap for the nz = 0 branch.
     \tparam Tc Matrix element type.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
+    \param work Same-spin scratch storage.
     \return Overlap matrix element.
     \ingroup gnme_wick
  **/
 template<typename Tc>
-inline Tc overlap_m0(
-    const arma::uvec &rows, const arma::uvec &cols,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y)
+inline Tc overlap_m0(same_scratch<Tc> &work)
 {
-    return overlap_branch(X(0), Y(0), rows, cols);
+    return overlap_det(work.det0);
 }
 
 /** \brief Evaluate same-spin overlap when all determinant columns are zero-replacement columns.
     \tparam Tc Matrix element type.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
+    \param work Same-spin scratch storage.
     \return Overlap matrix element.
     \ingroup gnme_wick
  **/
 template<typename Tc>
-inline Tc overlap_ml(
-    const arma::uvec &rows, const arma::uvec &cols,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y)
+inline Tc overlap_ml(same_scratch<Tc> &work)
 {
-    return overlap_branch(X(1), Y(1), rows, cols);
+    return overlap_det(work.det1);
 }
 
 /** \brief Evaluate same-spin overlap for the generic mixed-column case.
     \tparam Tc Matrix element type.
-    \param rows Row indices.
-    \param cols Column indices.
+    \param nex Excitation rank.
     \param nz Number of zero-overlap orbital pairs.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
+    \param work Same-spin scratch storage.
     \return Overlap matrix element.
     \ingroup gnme_wick
  **/
 template<typename Tc>
 inline Tc overlap_gen(
-    const arma::uvec &rows, const arma::uvec &cols,
+    const size_t nex,
     const size_t &nz,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y)
+    same_scratch<Tc> &work)
 {
-    const size_t nex = rows.n_elem;
-
-    arma::Mat<Tc> D;
-    build_det(X(0), Y(0), rows, cols, D);
-
-    arma::Mat<Tc> Db;
-    build_det(X(1), Y(1), rows, cols, Db);
-
     Tc S = Tc(0.0);
-    arma::Mat<Tc> Dtmp;
 
-    for_each_m_combination(nex, nz, [&](uint64_t bits) {
-        mix_det(D, Db, bits, 0, Dtmp);
-        S += det(Dtmp);
+    mix_dets_same(nex, nz, 0, work, [&](const uint64_t) {
+        S += overlap_det(work.det_mix);
     });
 
     return S;
@@ -217,24 +156,24 @@ inline void spin_overlap(
 
     if(nz > nex) return;
 
-    whp += wshift;
+    scratch<Tc> &store = local_scratch<Tc>();
+    same_scratch<Tc> &work = store.aa;
 
-    arma::uvec rows, cols;
-    indices(xhp, whp, rows, cols);
+    prepare_same(xhp, whp, wshift, nz, X, Y, work);
 
     if(nz == 0)
     {
-        S = overlap_m0(rows, cols, X, Y);
+        S = overlap_m0(work);
         return;
     }
 
     if(nz == nex)
     {
-        S = overlap_ml(rows, cols, X, Y);
+        S = overlap_ml(work);
         return;
     }
 
-    S = overlap_gen(rows, cols, nz, X, Y);
+    S = overlap_gen(nex, nz, work);
 }
 
 } // namespace wick_eval

@@ -3,6 +3,8 @@
 
 #include "helpers.h"
 #include "prepare.h"
+#include "scratch.h"
+#include "prepare_scratch.h"
 #include "overlap.h"
 #include "one_body.h"
 #include "two_body_same.h"

@@ -3,10 +3,11 @@
 
 #include <armadillo>
 #include <cstdint>
-#include <libgnme/utils/linalg.h>
 
 #include "helpers.h"
 #include "prepare.h"
+#include "scratch.h"
+#include "prepare_scratch.h"
 
 namespace libgnme {
 namespace wick_eval {
@@ -93,7 +94,7 @@ inline Tc two_body_same_ii_replacement(
         rows(r_full), cols(k_full));
 }
 
-/** \brief Evaluate same-spin two-body matrix element for nz = 0 and zero excitations.
+/** \brief Evaluate same-spin two-body matrix element for zero overlap zeros and no excitations.
     \tparam Tc Matrix element type.
     \param V Output two-body matrix element.
     \param V0 Zeroth-order same-spin two-body contractions.
@@ -105,280 +106,27 @@ inline void two_body_same_m0_l0(Tc &V, const arma::Col<Tc> &V0)
     V = V0(0);
 }
 
-/** \brief Evaluate same-spin two-body matrix element for nz = 0 and one excitation.
+/** \brief Evaluate same-spin two-body matrix element for nz = 0 using prepared scratch.
     \tparam Tc Matrix element type.
     \param rows Row indices.
     \param cols Column indices.
     \param V Output two-body matrix element.
-    \param X Lower-triangular contractions.
-    \param V0 Zeroth-order same-spin two-body contractions.
-    \param XVX First-order same-spin two-body contractions.
-    \ingroup gnme_wick
- **/
-template<typename Tc>
-inline void two_body_same_m0_l1(
-    const arma::uvec &rows, const arma::uvec &cols,
-    Tc &V,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::Col<Tc> &V0,
-    const arma::field<arma::Mat<Tc> > &XVX)
-{
-    const size_t r0 = rows(0);
-    const size_t c0 = cols(0);
-
-    V = V0(0) * X(0)(r0,c0) - Tc(2.0) * XVX(0,0,0)(r0,c0);
-}
-
-/** \brief Evaluate same-spin two-body matrix element for nz = 0 and two excitations.
-    \tparam Tc Matrix element type.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param V Output two-body matrix element.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
     \param V0 Zeroth-order same-spin two-body contractions.
     \param XVX First-order same-spin two-body contractions.
     \param II Same-spin two-electron intermediates.
     \param nact Total active dimension for flattened two-electron intermediates.
-    \ingroup gnme_wick
- **/
-template<typename Tc>
-inline void two_body_same_m0_l2(
-    const arma::uvec &rows, const arma::uvec &cols,
-    Tc &V,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y,
-    const arma::Col<Tc> &V0,
-    const arma::field<arma::Mat<Tc> > &XVX,
-    arma::field<arma::Mat<Tc> > &II,
-    const size_t nact)
-{
-    arma::Mat<Tc> D;
-    build_det(X(0), Y(0), rows, cols, D);
-
-    const Tc a00 = D(0,0);
-    const Tc a01 = D(0,1);
-    const Tc a10 = D(1,0);
-    const Tc a11 = D(1,1);
-    const Tc detD = a00 * a11 - a01 * a10;
-
-    const arma::Mat<Tc> &JK = XVX(0,0,0);
-
-    const size_t r0 = rows(0);
-    const size_t r1 = rows(1);
-    const size_t c0 = cols(0);
-    const size_t c1 = cols(1);
-
-    const Tc u0 = JK(r0,c0);
-    const Tc u1 = JK(r1,c0);
-    const Tc v0 = JK(r0,c1);
-    const Tc v1 = JK(r1,c1);
-
-    const Tc det_c0 = u0 * a11 - a01 * u1;
-    const Tc det_c1 = a00 * v1 - v0 * a10;
-
-    const Tc iiterm =
-          two_body_same_ii(II, nact, 0, 0, 0, 0, r0, c0, r1, c1)
-        - two_body_same_ii(II, nact, 0, 0, 0, 0, r0, c1, r1, c0)
-        - two_body_same_ii(II, nact, 0, 0, 0, 0, r1, c0, r0, c1)
-        + two_body_same_ii(II, nact, 0, 0, 0, 0, r1, c1, r0, c0);
-
-    V = V0(0) * detD - Tc(2.0) * (det_c0 + det_c1) + Tc(0.5) * iiterm;
-}
-
-/** \brief Evaluate same-spin two-body matrix element for nz = 0 and three excitations.
-    \tparam Tc Matrix element type.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param V Output two-body matrix element.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
-    \param V0 Zeroth-order same-spin two-body contractions.
-    \param XVX First-order same-spin two-body contractions.
-    \param II Same-spin two-electron intermediates.
-    \param nact Total active dimension for flattened two-electron intermediates.
-    \ingroup gnme_wick
- **/
-template<typename Tc>
-inline void two_body_same_m0_l3(
-    const arma::uvec &rows, const arma::uvec &cols,
-    Tc &V,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y,
-    const arma::Col<Tc> &V0,
-    const arma::field<arma::Mat<Tc> > &XVX,
-    arma::field<arma::Mat<Tc> > &II,
-    const size_t nact)
-{
-    arma::Mat<Tc> D;
-    build_det(X(0), Y(0), rows, cols, D);
-
-    arma::Mat<Tc> cofD;
-    const Tc detD = adjugate_transpose(D, cofD);
-
-    V = V0(0) * detD;
-
-    const arma::Mat<Tc> &JK = XVX(0,0,0);
-
-    for(size_t k=0; k<3; k++)
-    {
-        const size_t ck = cols(k);
-
-        const Tc repl =
-              cofD(0,k) * JK(rows(0),ck)
-            + cofD(1,k) * JK(rows(1),ck)
-            + cofD(2,k) * JK(rows(2),ck);
-
-        V -= Tc(2.0) * repl;
-    }
-
-    const arma::field<arma::Mat<Tc> > &IIfield = II;
-
-    for(size_t i=0; i<3; i++)
-    for(size_t j=0; j<3; j++)
-    {
-        const size_t r0 = minor_to_full(0, i);
-        const size_t r1 = minor_to_full(1, i);
-        const size_t c0 = minor_to_full(0, j);
-        const size_t c1 = minor_to_full(1, j);
-
-        const Tc a00 = D(r0,c0);
-        const Tc a01 = D(r0,c1);
-        const Tc a10 = D(r1,c0);
-        const Tc a11 = D(r1,c1);
-
-        const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
-
-        const size_t rf = rows(i);
-        const size_t cf = cols(j);
-
-        const Tc x00 = two_body_same_ii(
-            IIfield, nact, 0, 0, 0, 0,
-            rf, cf, rows(r0), cols(c0));
-
-        const Tc x10 = two_body_same_ii(
-            IIfield, nact, 0, 0, 0, 0,
-            rf, cf, rows(r1), cols(c0));
-
-        const Tc x01 = two_body_same_ii(
-            IIfield, nact, 0, 0, 0, 0,
-            rf, cf, rows(r0), cols(c1));
-
-        const Tc x11 = two_body_same_ii(
-            IIfield, nact, 0, 0, 0, 0,
-            rf, cf, rows(r1), cols(c1));
-
-        V += Tc(0.5 * phase) * (x00 * a11 - a01 * x10);
-        V += Tc(0.5 * phase) * (a00 * x11 - x01 * a10);
-    }
-}
-
-/** \brief Evaluate same-spin two-body matrix element for nz = 0 and arbitrary excitation rank.
-    \tparam Tc Matrix element type.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param V Output two-body matrix element.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
-    \param V0 Zeroth-order same-spin two-body contractions.
-    \param XVX First-order same-spin two-body contractions.
-    \param II Same-spin two-electron intermediates.
-    \param nact Total active dimension for flattened two-electron intermediates.
-    \ingroup gnme_wick
- **/
-template<typename Tc>
-inline void two_body_same_m0_gen(
-    const arma::uvec &rows, const arma::uvec &cols,
-    Tc &V,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y,
-    const arma::Col<Tc> &V0,
-    const arma::field<arma::Mat<Tc> > &XVX,
-    arma::field<arma::Mat<Tc> > &II,
-    const size_t nact)
-{
-    const size_t nex = rows.n_elem;
-
-    arma::Mat<Tc> D;
-    build_det(X(0), Y(0), rows, cols, D);
-
-    arma::Mat<Tc> cofD;
-    const Tc detD = adjugate_transpose(D, cofD);
-
-    V = V0(0) * detD;
-
-    const arma::Mat<Tc> &JK = XVX(0,0,0);
-
-    for(size_t k=0; k<nex; k++)
-    {
-        const size_t ck = cols(k);
-
-        const Tc corr = column_replacement_correction(
-            D, cofD, k,
-            [&](const size_t r) {
-                return JK(rows(r), ck);
-            });
-
-        V -= Tc(2.0) * (detD + corr);
-    }
-
-    arma::Mat<Tc> Dminor;
-    arma::Mat<Tc> cof_minor;
-
-    for(size_t i=0; i<nex; i++)
-    for(size_t j=0; j<nex; j++)
-    {
-        const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
-        const size_t r_fixed = rows(i);
-        const size_t c_fixed = cols(j);
-
-        minor_adjt(D, i, j, Dminor, cof_minor,
-            [&](const size_t lm1,
-                const arma::Mat<Tc> &det_minor,
-                const arma::Mat<Tc> &cof,
-                const Tc det_minor_val)
-            {
-                for(size_t k=0; k<lm1; k++)
-                {
-                    const Tc corr = column_replacement_correction(
-                        det_minor, cof, k,
-                        [&](const size_t r) {
-                        return two_body_same_ii_replacement(
-                            II, nact,
-                            0, 0, 0, 0,
-                            rows, cols,
-                            i, j, r, k, r_fixed, c_fixed);
-                        });
-
-                    V += Tc(0.5 * phase) * (det_minor_val + corr);
-                }
-            });
-    }
-}
-
-/** \brief Dispatch same-spin two-body matrix element for nz = 0.
-    \tparam Tc Matrix element type.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param V Output two-body matrix element.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
-    \param V0 Zeroth-order same-spin two-body contractions.
-    \param XVX First-order same-spin two-body contractions.
-    \param II Same-spin two-electron intermediates.
-    \param nact Total active dimension for flattened two-electron intermediates.
+    \param work Same-spin scratch storage.
     \ingroup gnme_wick
  **/
 template<typename Tc>
 inline void two_body_same_m0(
     const arma::uvec &rows, const arma::uvec &cols,
     Tc &V,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y,
     const arma::Col<Tc> &V0,
     const arma::field<arma::Mat<Tc> > &XVX,
     arma::field<arma::Mat<Tc> > &II,
-    const size_t nact)
+    const size_t nact,
+    same_scratch<Tc> &work)
 {
     const size_t nex = rows.n_elem;
 
@@ -390,37 +138,111 @@ inline void two_body_same_m0(
 
     if(nex == 1)
     {
-        two_body_same_m0_l1(rows, cols, V, X, V0, XVX);
+        const size_t r0 = rows(0);
+        const size_t c0 = cols(0);
+
+        V = V0(0) * work.det0(0,0)
+          - Tc(2.0) * XVX(0,0,0)(r0,c0);
+
         return;
     }
 
     if(nex == 2)
     {
-        two_body_same_m0_l2(rows, cols, V, X, Y, V0, XVX, II, nact);
+        const Tc a00 = work.det0(0,0);
+        const Tc a01 = work.det0(0,1);
+        const Tc a10 = work.det0(1,0);
+        const Tc a11 = work.det0(1,1);
+        const Tc detD = a00 * a11 - a01 * a10;
+
+        const arma::Mat<Tc> &JK = XVX(0,0,0);
+
+        const size_t r0 = rows(0);
+        const size_t r1 = rows(1);
+        const size_t c0 = cols(0);
+        const size_t c1 = cols(1);
+
+        const Tc u0 = JK(r0,c0);
+        const Tc u1 = JK(r1,c0);
+        const Tc v0 = JK(r0,c1);
+        const Tc v1 = JK(r1,c1);
+
+        const Tc det_c0 = u0 * a11 - a01 * u1;
+        const Tc det_c1 = a00 * v1 - v0 * a10;
+
+        const Tc iiterm =
+              two_body_same_ii(II, nact, 0, 0, 0, 0, r0, c0, r1, c1)
+            - two_body_same_ii(II, nact, 0, 0, 0, 0, r0, c1, r1, c0)
+            - two_body_same_ii(II, nact, 0, 0, 0, 0, r1, c0, r0, c1)
+            + two_body_same_ii(II, nact, 0, 0, 0, 0, r1, c1, r0, c0);
+
+        V = V0(0) * detD - Tc(2.0) * (det_c0 + det_c1) + Tc(0.5) * iiterm;
         return;
     }
 
-    if(nex == 3)
+    arma::Mat<Tc> &cofD = work.adjt_det;
+    const Tc detD = adjugate_transpose(work.det0, cofD);
+
+    V = V0(0) * detD;
+
+    const arma::Mat<Tc> &JK = XVX(0,0,0);
+
+    for(size_t k=0; k<nex; k++)
     {
-        two_body_same_m0_l3(rows, cols, V, X, Y, V0, XVX, II, nact);
-        return;
+        const size_t ck = cols(k);
+
+        const Tc corr = column_replacement_correction(
+            work.det0, cofD, k,
+            [&](const size_t r) {
+                return JK(rows(r), ck);
+            });
+
+        V -= Tc(2.0) * (detD + corr);
     }
 
-    two_body_same_m0_gen(rows, cols, V, X, Y, V0, XVX, II, nact);
+    for(size_t i=0; i<nex; i++)
+    for(size_t j=0; j<nex; j++)
+    {
+        const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
+        const size_t r_fixed = rows(i);
+        const size_t c_fixed = cols(j);
+
+        minor_adjt(work.det0, i, j, work.det_mix2, work.adjt_det2,
+            [&](const size_t lm1,
+                const arma::Mat<Tc> &det_minor,
+                const arma::Mat<Tc> &cof,
+                const Tc det_minor_val)
+            {
+                for(size_t k=0; k<lm1; k++)
+                {
+                    const Tc corr = column_replacement_correction(
+                        det_minor, cof, k,
+                        [&](const size_t r) {
+                            return two_body_same_ii_replacement(
+                                II, nact,
+                                0, 0, 0, 0,
+                                rows, cols,
+                                i, j, r, k,
+                                r_fixed, c_fixed);
+                        });
+
+                    V += Tc(0.5 * phase) * (det_minor_val + corr);
+                }
+            });
+    }
 }
 
-/** \brief Evaluate same-spin two-body matrix element for the generic nz > 0 case.
+/** \brief Evaluate same-spin two-body matrix element for the generic nz > 0 case using prepared scratch.
     \tparam Tc Matrix element type.
     \param rows Row indices.
     \param cols Column indices.
     \param V Output two-body matrix element.
     \param nz Number of zero-overlap orbital pairs.
-    \param X Lower-triangular contractions.
-    \param Y Upper-triangular contractions.
     \param V0 Zeroth-order same-spin two-body contractions.
     \param XVX First-order same-spin two-body contractions.
     \param II Same-spin two-electron intermediates.
     \param nact Total active dimension for flattened two-electron intermediates.
+    \param work Same-spin scratch storage.
     \ingroup gnme_wick
  **/
 template<typename Tc>
@@ -428,12 +250,11 @@ inline void two_body_same_gen(
     const arma::uvec &rows, const arma::uvec &cols,
     Tc &V,
     const size_t &nz,
-    const arma::field<arma::Mat<Tc> > &X,
-    const arma::field<arma::Mat<Tc> > &Y,
     const arma::Col<Tc> &V0,
     const arma::field<arma::Mat<Tc> > &XVX,
     arma::field<arma::Mat<Tc> > &II,
-    const size_t nact)
+    const size_t nact,
+    same_scratch<Tc> &work)
 {
     const size_t nex = rows.n_elem;
 
@@ -459,32 +280,18 @@ inline void two_body_same_gen(
             const size_t m1 = bit(bits, 1);
             const size_t m2 = bit(bits, 2);
 
-            V += V0(m0 + m1) * X(m2)(r0,c0)
+            V += V0(m0 + m1) * (m2 ? work.det1(0,0) : work.det0(0,0))
                - Tc(2.0) * XVX(m0,m1,m2)(r0,c0);
         });
 
         return;
     }
 
-    arma::Mat<Tc> D;
-    build_det(X(0), Y(0), rows, cols, D);
-
-    arma::Mat<Tc> Db;
-    build_det(X(1), Y(1), rows, cols, Db);
-
-    arma::Mat<Tc> Dtmp;
-    arma::Mat<Tc> cofDtmp;
-
-    arma::Mat<Tc> Dminor;
-    arma::Mat<Tc> cof_minor;
-
-    for_each_m_combination(nex+2, nz, [&](uint64_t bits) {
+    mix_dets_same(nex, nz, 2, work, [&](const uint64_t bits) {
         const size_t m0 = bit(bits, 0);
         const size_t m1 = bit(bits, 1);
 
-        mix_det(D, Db, bits, 2, Dtmp);
-
-        const Tc detDtmp = adjugate_transpose(Dtmp, cofDtmp);
+        const Tc detDtmp = adjugate_transpose(work.det_mix, work.adjt_det);
 
         Tc contrib = V0(m0 + m1) * detDtmp;
 
@@ -494,7 +301,7 @@ inline void two_body_same_gen(
             const size_t ck = cols(k);
 
             const Tc corr = column_replacement_correction(
-                Dtmp, cofDtmp, k,
+                work.det_mix, work.adjt_det, k,
                 [&](const size_t r) {
                     return XVX(m0,m1,mk)(rows(r),ck);
                 });
@@ -511,7 +318,7 @@ inline void two_body_same_gen(
             const size_t cj_fixed = cols(j);
             const size_t mj = bit(bits, j+2);
 
-            minor_adjt(Dtmp, i, j, Dminor, cof_minor,
+            minor_adjt(work.det_mix, i, j, work.det_mix2, work.adjt_det2,
                 [&](const size_t lm1,
                     const arma::Mat<Tc> &det_minor,
                     const arma::Mat<Tc> &cof,
@@ -578,20 +385,22 @@ inline void two_body_same(
 
     if(nz > nex + 2) return;
 
-    whp += nactx;
+    scratch<Tc> &store = local_scratch<Tc>();
+    same_scratch<Tc> &work = store.aa;
 
-    arma::uvec rows, cols;
-    indices(xhp, whp, rows, cols);
+    prepare_same(xhp, whp, nactx, nz, X, Y, work);
 
+    const arma::uvec &rows = work.rows;
+    const arma::uvec &cols = work.cols;
     const size_t nact = nactx + nactw;
 
     if(nz == 0)
     {
-        two_body_same_m0(rows, cols, V, X, Y, V0, XVX, II, nact);
+        two_body_same_m0(rows, cols, V, V0, XVX, II, nact, work);
         return;
     }
 
-    two_body_same_gen(rows, cols, V, nz, X, Y, V0, XVX, II, nact);
+    two_body_same_gen(rows, cols, V, nz, V0, XVX, II, nact, work);
 }
 
 } // namespace wick_eval

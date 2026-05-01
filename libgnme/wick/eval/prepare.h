@@ -10,139 +10,40 @@
 namespace libgnme {
 namespace wick_eval {
 
-/** \brief Build same-spin determinant rows and columns from particle-hole lists.
-    \param xhp Particle-hole indices for bra state.
-    \param whp Particle-hole indices for ket state.
+/** \brief Build Wick determinant row and column index arrays.
+    \param xhp Particle-hole indices for the bra excitation.
+    \param whp Particle-hole indices for the ket excitation.
     \param rows Output row indices.
     \param cols Output column indices.
     \ingroup gnme_wick
  **/
 inline void indices(
-    const arma::umat &xhp, const arma::umat &whp,
-    arma::uvec &rows, arma::uvec &cols)
+    const arma::umat &xhp,
+    const arma::umat &whp,
+    arma::uvec &rows,
+    arma::uvec &cols)
 {
     const size_t nx = xhp.n_rows;
     const size_t nw = whp.n_rows;
+    const size_t nex = nx + nw;
 
-    if(nx == 0 && nw == 0)
+    rows.set_size(nex);
+    cols.set_size(nex);
+
+    for(size_t i=0; i<nx; i++)
     {
-        rows.set_size(0);
-        cols.set_size(0);
+        rows(i) = xhp(i,1);
+        cols(i) = xhp(i,0);
     }
-    else if(nx == 0)
+
+    for(size_t i=0; i<nw; i++)
     {
-        rows = whp.col(0);
-        cols = whp.col(1);
-    }
-    else if(nw == 0)
-    {
-        rows = xhp.col(1);
-        cols = xhp.col(0);
-    }
-    else
-    {
-        rows = arma::join_cols(xhp.col(1), whp.col(0));
-        cols = arma::join_cols(xhp.col(0), whp.col(1));
+        rows(nx+i) = whp(i,0);
+        cols(nx+i) = whp(i,1);
     }
 }
 
-/** \brief Build a 1x1 Wick determinant from lower and upper contraction matrices.
-    \tparam T Matrix element type.
-    \param X Lower-triangular contraction matrix.
-    \param Y Upper-triangular contraction matrix.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param D Output determinant matrix.
-    \ingroup gnme_wick
- **/
-template<typename T>
-inline void build_det1(
-    const arma::Mat<T> &X, const arma::Mat<T> &Y,
-    const arma::uvec &rows, const arma::uvec &cols,
-    arma::Mat<T> &D)
-{
-    (void)Y;
-
-    D.set_size(1,1);
-    D(0,0) = X(rows(0),cols(0));
-}
-
-/** \brief Build a 2x2 Wick determinant from lower and upper contraction matrices.
-    \tparam T Matrix element type.
-    \param X Lower-triangular contraction matrix.
-    \param Y Upper-triangular contraction matrix.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param D Output determinant matrix.
-    \ingroup gnme_wick
- **/
-template<typename T>
-inline void build_det2(
-    const arma::Mat<T> &X, const arma::Mat<T> &Y,
-    const arma::uvec &rows, const arma::uvec &cols,
-    arma::Mat<T> &D)
-{
-    D.set_size(2,2);
-
-    const size_t r0 = rows(0), r1 = rows(1);
-    const size_t c0 = cols(0), c1 = cols(1);
-
-    D(0,0) = X(r0,c0); D(0,1) = Y(r0,c1);
-    D(1,0) = X(r1,c0); D(1,1) = X(r1,c1);
-}
-
-/** \brief Build a 3x3 Wick determinant from lower and upper contraction matrices.
-    \tparam T Matrix element type.
-    \param X Lower-triangular contraction matrix.
-    \param Y Upper-triangular contraction matrix.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param D Output determinant matrix.
-    \ingroup gnme_wick
- **/
-template<typename T>
-inline void build_det3(
-    const arma::Mat<T> &X, const arma::Mat<T> &Y,
-    const arma::uvec &rows, const arma::uvec &cols,
-    arma::Mat<T> &D)
-{
-    D.set_size(3,3);
-
-    const size_t r0 = rows(0), r1 = rows(1), r2 = rows(2);
-    const size_t c0 = cols(0), c1 = cols(1), c2 = cols(2);
-
-    D(0,0) = X(r0,c0); D(0,1) = Y(r0,c1); D(0,2) = Y(r0,c2);
-    D(1,0) = X(r1,c0); D(1,1) = X(r1,c1); D(1,2) = Y(r1,c2);
-    D(2,0) = X(r2,c0); D(2,1) = X(r2,c1); D(2,2) = X(r2,c2);
-}
-
-/** \brief Build a 4x4 Wick determinant from lower and upper contraction matrices.
-    \tparam T Matrix element type.
-    \param X Lower-triangular contraction matrix.
-    \param Y Upper-triangular contraction matrix.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param D Output determinant matrix.
-    \ingroup gnme_wick
- **/
-template<typename T>
-inline void build_det4(
-    const arma::Mat<T> &X, const arma::Mat<T> &Y,
-    const arma::uvec &rows, const arma::uvec &cols,
-    arma::Mat<T> &D)
-{
-    D.set_size(4,4);
-
-    const size_t r0 = rows(0), r1 = rows(1), r2 = rows(2), r3 = rows(3);
-    const size_t c0 = cols(0), c1 = cols(1), c2 = cols(2), c3 = cols(3);
-
-    D(0,0) = X(r0,c0); D(0,1) = Y(r0,c1); D(0,2) = Y(r0,c2); D(0,3) = Y(r0,c3);
-    D(1,0) = X(r1,c0); D(1,1) = X(r1,c1); D(1,2) = Y(r1,c2); D(1,3) = Y(r1,c3);
-    D(2,0) = X(r2,c0); D(2,1) = X(r2,c1); D(2,2) = X(r2,c2); D(2,3) = Y(r2,c3);
-    D(3,0) = X(r3,c0); D(3,1) = X(r3,c1); D(3,2) = X(r3,c2); D(3,3) = X(r3,c3);
-}
-
-/** \brief Build a Wick determinant from lower and upper contraction matrices.
+/** \brief Build a Wick determinant matrix from lower/upper contraction branches.
     \tparam T Matrix element type.
     \param X Lower-triangular contraction matrix.
     \param Y Upper-triangular contraction matrix.
@@ -153,16 +54,13 @@ inline void build_det4(
  **/
 template<typename T>
 inline void build_det(
-    const arma::Mat<T> &X, const arma::Mat<T> &Y,
-    const arma::uvec &rows, const arma::uvec &cols,
+    const arma::Mat<T> &X,
+    const arma::Mat<T> &Y,
+    const arma::uvec &rows,
+    const arma::uvec &cols,
     arma::Mat<T> &D)
 {
     const size_t n = rows.n_elem;
-
-    if(n == 1) { build_det1(X, Y, rows, cols, D); return; }
-    if(n == 2) { build_det2(X, Y, rows, cols, D); return; }
-    if(n == 3) { build_det3(X, Y, rows, cols, D); return; }
-    if(n == 4) { build_det4(X, Y, rows, cols, D); return; }
 
     D.set_size(n,n);
 
@@ -171,52 +69,85 @@ inline void build_det(
         D(i,j) = (i >= j) ? X(rows(i),cols(j)) : Y(rows(i),cols(j));
 }
 
-/** \brief Build a matrix from one contraction matrix.
+/** \brief Build a dense contraction submatrix.
     \tparam T Matrix element type.
-    \param A Contraction matrix.
+    \param A Full contraction matrix.
     \param rows Row indices.
     \param cols Column indices.
-    \param D Output matrix.
+    \param B Output submatrix.
     \ingroup gnme_wick
  **/
 template<typename T>
 inline void build_mat(
     const arma::Mat<T> &A,
-    const arma::uvec &rows, const arma::uvec &cols,
-    arma::Mat<T> &D)
+    const arma::uvec &rows,
+    const arma::uvec &cols,
+    arma::Mat<T> &B)
 {
     const size_t n = rows.n_elem;
-    D.set_size(n,n);
+
+    B.set_size(n,n);
 
     for(size_t j=0; j<n; j++)
     for(size_t i=0; i<n; i++)
-        D(i,j) = A(rows(i),cols(j));
+        B(i,j) = A(rows(i),cols(j));
 }
 
-/** \brief Replace selected columns using a bitstring mask.
+/** \brief Mix columns from two determinant matrices according to a vector of selectors.
     \tparam T Matrix element type.
-    \param D Non-zero-overlap branch determinant.
-    \param Dbar Zero-overlap branch determinant.
-    \param bits Column replacement bitstring.
-    \param offset Offset into bitstring.
-    \param out Output mixed determinant.
+    \param D Non-zero-overlap determinant branch.
+    \param Db Zero-overlap determinant branch.
+    \param m Column selector vector. Zero selects D; non-zero selects Db.
+    \param Dtmp Output mixed determinant.
     \ingroup gnme_wick
  **/
 template<typename T>
 inline void mix_det(
-    const arma::Mat<T> &D, const arma::Mat<T> &Dbar,
-    const uint64_t bits, const size_t offset,
-    arma::Mat<T> &out)
+    const arma::Mat<T> &D,
+    const arma::Mat<T> &Db,
+    const std::vector<size_t> &m,
+    arma::Mat<T> &Dtmp)
 {
     const size_t n = D.n_rows;
-    out.set_size(n,n);
+
+    Dtmp.set_size(n,n);
 
     for(size_t j=0; j<n; j++)
     {
-        const arma::Mat<T> &src = bit(bits, j+offset) ? Dbar : D;
+        const arma::Mat<T> &src = m[j] ? Db : D;
 
         for(size_t i=0; i<n; i++)
-            out(i,j) = src(i,j);
+            Dtmp(i,j) = src(i,j);
+    }
+}
+
+/** \brief Mix columns from two determinant matrices according to a bitstring.
+    \tparam T Matrix element type.
+    \param D Non-zero-overlap determinant branch.
+    \param Db Zero-overlap determinant branch.
+    \param bits Column selector bitstring.
+    \param offset Offset into bitstring for determinant columns.
+    \param Dtmp Output mixed determinant.
+    \ingroup gnme_wick
+ **/
+template<typename T>
+inline void mix_det(
+    const arma::Mat<T> &D,
+    const arma::Mat<T> &Db,
+    const uint64_t bits,
+    const size_t offset,
+    arma::Mat<T> &Dtmp)
+{
+    const size_t n = D.n_rows;
+
+    Dtmp.set_size(n,n);
+
+    for(size_t j=0; j<n; j++)
+    {
+        const arma::Mat<T> &src = bit(bits,j+offset) ? Db : D;
+
+        for(size_t i=0; i<n; i++)
+            Dtmp(i,j) = src(i,j);
     }
 }
 
