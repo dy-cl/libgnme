@@ -1,6 +1,8 @@
 #include <cassert>
 #include <libgnme/utils/eri_ao2mo.h>
 #include "two_body_uscf.h"
+#include "eval/two_body_same.h"
+#include "eval/helpers.h"
 
 namespace libgnme {
 
@@ -128,22 +130,32 @@ void two_body_uscf<Tc,Tf,Tb>::initialise(
     for(size_t k=0; k<da; k++)
     for(size_t l=0; l<da; l++)
     {
+        size_t p = wick_eval::two_body_pair(i, j);
+        size_t q = wick_eval::two_body_pair(k, l);
+
+        if(p > q) continue;
+        
         // Initialise the memory
-        m_IIaa(2*i+j, 2*k+l).resize(nacta*nacta, nacta*nacta); 
+        m_IIaa(p,q).resize(nacta*nacta, nacta*nacta);
+
         // Construct two-electron integrals
-        eri_ao2mo(orba.m_CX(i), orba.m_XC(j), orba.m_CX(k), orba.m_XC(l), 
-                  IIao, m_IIaa(2*i+j, 2*k+l), true); 
+        eri_ao2mo(orba.m_CX(i), orba.m_XC(j), orba.m_CX(k), orba.m_XC(l), IIao, m_IIaa(p,q), true);
     }
     for(size_t i=0; i<db; i++)
     for(size_t j=0; j<db; j++)
     for(size_t k=0; k<db; k++)
     for(size_t l=0; l<db; l++)
-    {
+    {   
+        size_t p = wick_eval::two_body_pair(i, j);
+        size_t q = wick_eval::two_body_pair(k, l);
+
+        if(p > q) continue;
+
         // Initialise the memory
-        m_IIbb(2*i+j, 2*k+l).resize(nactb*nactb, nactb*nactb); 
+        m_IIbb(p,q).resize(nactb*nactb, nactb*nactb);
+
         // Construct two-electron integrals
-        eri_ao2mo(orbb.m_CX(i), orbb.m_XC(j), orbb.m_CX(k), orbb.m_XC(l), 
-                  IIao, m_IIbb(2*i+j, 2*k+l), true); 
+        eri_ao2mo(orbb.m_CX(i), orbb.m_XC(j), orbb.m_CX(k), orbb.m_XC(l), IIao, m_IIbb(p,q), true);
     }
     for(size_t i=0; i<da; i++)
     for(size_t j=0; j<da; j++)

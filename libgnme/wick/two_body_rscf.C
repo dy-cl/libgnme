@@ -1,6 +1,7 @@
 #include <cassert>
 #include <libgnme/utils/eri_ao2mo.h>
 #include "two_body_rscf.h"
+#include "eval/helpers.h"
 
 namespace libgnme {
 
@@ -84,13 +85,29 @@ void two_body_rscf<Tc,Tf,Tb>::initialise(
     for(size_t k=0; k<d; k++)
     for(size_t l=0; l<d; l++)
     {
+        const size_t p = wick_eval::two_body_pair(i, j);
+        const size_t q = wick_eval::two_body_pair(k, l);
+
         // Initialise the memory
-        m_IIss(2*i+j, 2*k+l).resize(nact*nact, nact*nact); 
-        m_IIst(2*i+j, 2*k+l).resize(nact*nact, nact*nact); 
-        // Construct two-electron integrals
-        eri_ao2mo_split(orb.m_CX(i), orb.m_XC(j), orb.m_CX(k), orb.m_XC(l), 
-                        V, m_IIst(2*i+j, 2*k+l), m_IIss(2*i+j, 2*k+l), true); 
-        m_IIss(2*i+j, 2*k+l) += m_IIst(2*i+j, 2*k+l);
+        m_IIst(p,q).resize(nact*nact, nact*nact);
+
+        if(p <= q)
+        {
+            m_IIss(p,q).resize(nact*nact, nact*nact);
+            
+            // Construct two-electron integrals
+            eri_ao2mo_split(orb.m_CX(i), orb.m_XC(j), orb.m_CX(k), orb.m_XC(l), V, m_IIst(p,q), m_IIss(p,q), true);
+
+            m_IIss(p,q) += m_IIst(p,q);
+        }
+        else
+        {
+            arma::Mat<Tc> dummy;
+            dummy.resize(nact*nact, nact*nact);
+            
+            // Construct two-electron integrals
+            eri_ao2mo_split(orb.m_CX(i), orb.m_XC(j), orb.m_CX(k), orb.m_XC(l), V, m_IIst(p,q), dummy, true);
+        }
     }
 }
 

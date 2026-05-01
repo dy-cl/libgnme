@@ -1,6 +1,7 @@
 #ifndef LIBGNME_WICK_EVAL_HELPERS_H
 #define LIBGNME_WICK_EVAL_HELPERS_H
 
+#include <algorithm>
 #include <armadillo>
 #include <cassert>
 #include <cstdint>
@@ -9,6 +10,31 @@
 
 namespace libgnme {
 namespace wick_eval {
+
+/** \brief Convert two zero-branch selectors into a branch-pair index.
+\param m0 First branch selector.
+\param m1 Second branch selector.
+\return Branch-pair index.
+\ingroup gnme_wick
+ **/
+inline size_t two_body_pair(const size_t m0, const size_t m1)
+{
+    return 2 * m0 + m1;
+}
+
+/** \brief Canonicalise same-spin branch-pair indices using pair-exchange symmetry.
+    \param p First branch-pair index.
+    \param q Second branch-pair index.
+    \param transpose Whether the requested block is stored transposed.
+    \ingroup gnme_wick
+ **/
+inline void two_body_same_canonical(size_t &p, size_t &q, bool &transpose)
+{
+    transpose = (p > q);
+
+    if(transpose)
+        std::swap(p, q);
+}
 
 /** \brief Map an index in a minor matrix back to the full matrix.
     \param midx Index in the minor matrix.
