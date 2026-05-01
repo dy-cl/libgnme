@@ -215,11 +215,8 @@ inline void two_body_same_m0_gen(
     arma::Mat<Tc> D;
     build_det(X(0), Y(0), rows, cols, D);
 
-    Tc detD;
-    size_t nzero;
     arma::Mat<Tc> cofD;
-    adjoint_matrix(D, cofD, detD, nzero);
-    cofD = cofD.t();
+    const Tc detD = adjugate_transpose(D, cofD);
 
     V = V0(0) * detD;
 
@@ -346,7 +343,35 @@ inline void two_body_same_gen(
     const size_t nact)
 {
     const size_t nex = rows.n_elem;
-    const size_t d = (nz > 0) ? 2 : 1;
+
+    if(nex == 0)
+    {
+        for_each_m_combination(2, nz, [&](uint64_t bits) {
+            const size_t m0 = bit(bits, 0);
+            const size_t m1 = bit(bits, 1);
+
+            V += V0(m0 + m1);
+        });
+
+        return;
+    }
+
+    if(nex == 1)
+    {
+        const size_t r0 = rows(0);
+        const size_t c0 = cols(0);
+
+        for_each_m_combination(3, nz, [&](uint64_t bits) {
+            const size_t m0 = bit(bits, 0);
+            const size_t m1 = bit(bits, 1);
+            const size_t m2 = bit(bits, 2);
+
+            V += V0(m0 + m1) * X(m2)(r0,c0)
+               - Tc(2.0) * XVX(m0,m1,m2)(r0,c0);
+        });
+
+        return;
+    }
 
     arma::Mat<Tc> D;
     build_det(X(0), Y(0), rows, cols, D);
@@ -354,13 +379,11 @@ inline void two_body_same_gen(
     arma::Mat<Tc> Db;
     build_det(X(1), Y(1), rows, cols, Db);
 
-    arma::field<arma::Mat<Tc> > JKtmp(d,d,d);
-    for(size_t i=0; i<d; i++)
-    for(size_t j=0; j<d; j++)
-    for(size_t k=0; k<d; k++)
-        build_mat(XVX(i,j,k), rows, cols, JKtmp(i,j,k));
-
     arma::Mat<Tc> Dtmp;
+    arma::Mat<Tc> cofDtmp;
+
+    arma::Mat<Tc> Dminor;
+    arma::Mat<Tc> cof_minor;
 
     for_each_m_combination(nex+2, nz, [&](uint64_t bits) {
         const size_t m0 = bit(bits, 0);
@@ -368,78 +391,61 @@ inline void two_body_same_gen(
 
         mix_det(D, Db, bits, 2, Dtmp);
 
-        Tc detDtmp;
-        size_t nzero;
-        arma::Mat<Tc> adjDtmp;
-        adjoint_matrix(Dtmp, adjDtmp, detDtmp, nzero);
-        adjDtmp = adjDtmp.t();
+        const Tc detDtmp = adjugate_transpose(Dtmp, cofDtmp);
 
-        V += V0(m0 + m1) * detDtmp;
+        Tc contrib = V0(m0 + m1) * detDtmp;
 
-        for(size_t i=0; i<nex; i++)
+        for(size_t k=0; k<nex; k++)
         {
-            const size_t mi = bit(bits, i+2);
+            const size_t mk = bit(bits, k+2);
+            const size_t ck = cols(k);
 
-            arma::Col<Tc> v1(JKtmp(m0,m1,mi).colptr(i), nex, false, true);
-            arma::Col<Tc> v2(Dtmp.colptr(i), nex, false, true);
-            arma::Col<Tc> a(adjDtmp.colptr(i), nex, false, true);
+            const Tc corr = column_replacement_correction(
+                Dtmp, cofDtmp, k,
+                [&](const size_t r) {
+                    return XVX(m0,m1,mk)(rows(r),ck);
+                });
 
-            V -= Tc(2.0) * (detDtmp + arma::dot(v1-v2, a));
+            contrib -= Tc(2.0) * (detDtmp + corr);
         }
-
-        arma::field<arma::Mat<Tc> > IItmp(d);
-        arma::Mat<Tc> D2, Db2, Dtmp2;
 
         for(size_t i=0; i<nex; i++)
         for(size_t j=0; j<nex; j++)
         {
-            for(size_t x=0; x<d; x++)
-            {
-                IItmp(x).set_size(nex-1, nex-1);
-
-                for(size_t kk=0; kk<nex-1; kk++)
-                for(size_t rr=0; rr<nex-1; rr++)
-                {
-                    const size_t r_full = minor_to_full(rr, i);
-                    const size_t k_full = minor_to_full(kk, j);
-
-                    IItmp(x)(rr,kk) = two_body_same_ii(
-                        II, nact,
-                        m0, m1, bit(bits, 2), x,
-                        rows(i), cols(j),
-                        rows(r_full), cols(k_full));
-                }
-            }
-
-            D2 = D;
-            D2.shed_row(i);
-            D2.shed_col(j);
-
-            Db2 = Db;
-            Db2.shed_row(i);
-            Db2.shed_col(j);
-
-            mix_det(D2, Db2, bits, 3, Dtmp2);
-
-            Tc detDtmp2;
-            size_t nzero2;
-            arma::Mat<Tc> adjDtmp2;
-            adjoint_matrix(Dtmp2, adjDtmp2, detDtmp2, nzero2);
-            adjDtmp2 = adjDtmp2.t();
-
             const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
 
-            for(size_t k=0; k<nex-1; k++)
-            {
-                const size_t mk = bit(bits, k+3);
+            const size_t ri_fixed = rows(i);
+            const size_t cj_fixed = cols(j);
+            const size_t mj = bit(bits, j+2);
 
-                arma::Col<Tc> v1(IItmp(mk).colptr(k), nex-1, false, true);
-                arma::Col<Tc> v2(Dtmp2.colptr(k), nex-1, false, true);
-                arma::Col<Tc> a(adjDtmp2.colptr(k), nex-1, false, true);
+            minor_adjt(Dtmp, i, j, Dminor, cof_minor,
+                [&](const size_t lm1,
+                    const arma::Mat<Tc> &det_minor,
+                    const arma::Mat<Tc> &cof,
+                    const Tc det_minor_val)
+                {
+                    for(size_t k2=0; k2<lm1; k2++)
+                    {
+                        const size_t k_full = minor_to_full(k2, j);
+                        const size_t mk = bit(bits, k_full+2);
 
-                V += Tc(0.5 * phase) * (detDtmp2 + arma::dot(v1-v2, a));
-            }
+                        const Tc corr = column_replacement_correction(
+                            det_minor, cof, k2,
+                            [&](const size_t r) {
+                                return two_body_same_ii_replacement(
+                                    II, nact,
+                                    m0, m1, mk, mj,
+                                    rows, cols,
+                                    i, j, r, k2,
+                                    ri_fixed, cj_fixed);
+                            });
+
+                        contrib += Tc(0.5 * phase) * (det_minor_val + corr);
+                    }
+                });
         }
+
+        V += contrib;
     });
 }
 

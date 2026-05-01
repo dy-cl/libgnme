@@ -112,11 +112,8 @@ inline void one_body_m0_gen(
     arma::Mat<Tc> Fmat;
     build_mat(XFX(0,0), rows, cols, Fmat);
 
-    Tc detD;
-    size_t nzero;
     arma::Mat<Tc> adjD;
-    adjoint_matrix(D, adjD, detD, nzero);
-    adjD = adjD.t();
+    const Tc detD = adjugate_transpose(D, adjD);
 
     F = F0(0) * detD;
 
@@ -216,11 +213,8 @@ inline void one_body_gen(
 
         mix_det(D, Db, bits, 1, Dtmp);
 
-        Tc detDtmp;
-        size_t nzero;
         arma::Mat<Tc> adjDtmp;
-        adjoint_matrix(Dtmp, adjDtmp, detDtmp, nzero);
-        adjDtmp = adjDtmp.t();
+        const Tc detDtmp = adjugate_transpose(Dtmp, adjDtmp);
 
         F += F0(m0) * detDtmp;
 

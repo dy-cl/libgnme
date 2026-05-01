@@ -57,10 +57,10 @@ void wick_base<Tc,Tf,Tb>::diff_spin_two_body(
     const size_t nactwb = m_orbb.m_refw.m_nact;
 
     wick_eval::two_body_diff(
-        xahp, xbhp, wahp, wbhp, V,
-        nza, nzb, Xa, Ya, Xb, Yb,
-        Vab, XVaXb, XVbXa, IIab, IIba,
-        nactxa, nactwa, nactxb, nactwb);
+    xahp, xbhp, wahp, wbhp, V,
+    nza, nzb, Xa, Ya, Xb, Yb,
+    Vab, XVaXb, XVbXa, IIab,
+    nactxa, nactwa, nactxb, nactwb);
 
     return;
 }
