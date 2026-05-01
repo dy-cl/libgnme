@@ -2,8 +2,8 @@
 
 int main()
 {
-    return run_uscf_benchmark(
+    return run_rscf_benchmark(
         "h2o_6-31g",
-        "wick_uscf_two_body_bench",
+        "wick_rscf_two_body_bench",
         wick_bench_task::two_body);
 }
