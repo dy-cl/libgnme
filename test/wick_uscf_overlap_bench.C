@@ -4,6 +4,6 @@ int main()
 {
     return run_uscf_benchmark(
         "h2o_6-31g",
-        "wick_uscf_two_body_bench",
-        wick_bench_task::two_body);
+        "wick_uscf_overlap_bench",
+        wick_bench_task::overlap);
 }

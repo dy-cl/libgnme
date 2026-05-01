@@ -1,4 +1,4 @@
-set(TESTS 
+set(TESTS
     casci_uscf_coupling
     casci_rscf_coupling
     casci_rscf_coupling_split
@@ -7,7 +7,12 @@ set(TESTS
     wick_uscf_two_body_test
     wick_rscf_one_body_test
     wick_rscf_two_body_test
+    wick_uscf_overlap_bench
+    wick_rscf_overlap_bench
+    wick_uscf_one_body_bench
+    wick_rscf_one_body_bench
     wick_uscf_two_body_bench
+    wick_rscf_two_body_bench
 )
 
 foreach(TEST ${TESTS})
