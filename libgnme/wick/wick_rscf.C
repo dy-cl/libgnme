@@ -4,7 +4,7 @@
 #include "wick_rscf.h"
 #include "one_body_rscf.h"
 #include "two_body_rscf.h"
-#include "eval/scratch.h"
+#include "eval/wick_eval.h"
 
 namespace libgnme {
 
@@ -51,7 +51,6 @@ void wick_rscf<Tc,Tf,Tb>::evaluate(
     V *= ((Tc) parity);
 }
 
-
 template<typename Tc, typename Tf, typename Tb>
 void wick_rscf<Tc,Tf,Tb>::evaluate_rdm1(
     bitset &bxa, bitset &bxb, 
@@ -69,8 +68,13 @@ void wick_rscf<Tc,Tf,Tb>::evaluate_rdm1(
     // Get parity 
     int parity = pxa * pxb * pwa * pwb;
 
-    // Prepare Wick contractions once for each spin sector
+    // Ensure scratch capacity once for this matrix element
+    const size_t la = xahp.n_rows + wahp.n_rows;
+    const size_t lb = xbhp.n_rows + wbhp.n_rows;
     wick_eval::scratch<Tc> &scratch = wick_eval::local_scratch<Tc>();
+    scratch.ensure_capacity(la, lb);
+
+    // Prepare Wick contractions once for each spin sector
     this->prepare_spin(xahp, wahp, true, scratch.aa);
     this->prepare_spin(xbhp, wbhp, false, scratch.bb);
 
@@ -96,7 +100,6 @@ void wick_rscf<Tc,Tf,Tb>::evaluate_rdm1(
     P1 = ((Tc) parity) * m_orba.m_redS * m_orbb.m_redS * (sb * Pa + sa * Pb);
 }
 
-
 template<typename Tc, typename Tf, typename Tb>
 void wick_rscf<Tc,Tf,Tb>::evaluate_rdm12(
     bitset &bxa, bitset &bxb, 
@@ -115,8 +118,13 @@ void wick_rscf<Tc,Tf,Tb>::evaluate_rdm12(
     // Get parity 
     int parity = pxa * pxb * pwa * pwb;
 
-    // Prepare Wick contractions once for each spin sector
+    // Ensure scratch capacity once for this matrix element
+    const size_t la = xahp.n_rows + wahp.n_rows;
+    const size_t lb = xbhp.n_rows + wbhp.n_rows;
     wick_eval::scratch<Tc> &scratch = wick_eval::local_scratch<Tc>();
+    scratch.ensure_capacity(la, lb);
+
+    // Prepare Wick contractions once for each spin sector
     this->prepare_spin(xahp, wahp, true, scratch.aa);
     this->prepare_spin(xbhp, wbhp, false, scratch.bb);
 
@@ -143,11 +151,14 @@ void wick_rscf<Tc,Tf,Tb>::evaluate_rdm12(
 
     // Temporary variables for 2RDM
     arma::Mat<Tc> tmpP(m_nmo*m_nmo,m_nmo*m_nmo);
+
     // Treat each spin sector separately
     this->same_spin_rdm2(xahp, wahp, occ_xa, occ_wa, tmpP, true);
     P2 += ((Tc) parity) * m_orba.m_redS * m_orbb.m_redS * sb * tmpP;
+
     this->same_spin_rdm2(xbhp, wbhp, occ_xb, occ_wb, tmpP, false);
     P2 += ((Tc) parity) * m_orba.m_redS * m_orbb.m_redS * sa * tmpP;
+
     this->diff_spin_rdm2(xahp, xbhp, wahp, wbhp, occ_xa, occ_xb, occ_wa, occ_wb, Pa, Pb, tmpP);
     P2 += ((Tc) parity) * m_orba.m_redS * m_orbb.m_redS * tmpP;
 }
@@ -158,7 +169,11 @@ void wick_rscf<Tc,Tf,Tb>::evaluate_overlap(
     arma::umat &wahp, arma::umat &wbhp,
     Tc &S)
 {
+    // Ensure scratch capacity once for this matrix element
+    const size_t la = xahp.n_rows + wahp.n_rows;
+    const size_t lb = xbhp.n_rows + wbhp.n_rows;
     wick_eval::scratch<Tc> &scratch = wick_eval::local_scratch<Tc>();
+    scratch.ensure_capacity(la, lb);
 
     // Prepare Wick contractions once for each spin sector
     this->prepare_spin(xahp, wahp, true, scratch.aa);
@@ -178,7 +193,10 @@ void wick_rscf<Tc,Tf,Tb>::evaluate_one_body_spin(
     arma::umat &xhp, arma::umat &whp, 
     Tc &S, Tc &V)
 {
+    // Ensure scratch capacity once for this spin-sector matrix element
+    const size_t l = xhp.n_rows + whp.n_rows;
     wick_eval::scratch<Tc> &scratch = wick_eval::local_scratch<Tc>();
+    scratch.ensure_capacity(l, 0);
 
     // Prepare Wick contractions once for this spin sector
     this->prepare_spin(xhp, whp, true, scratch.aa);
@@ -204,7 +222,11 @@ void wick_rscf<Tc,Tf,Tb>::evaluate(
     arma::umat &wahp, arma::umat &wbhp,
     Tc &S, Tc &V)
 {
+    // Ensure scratch capacity once for this matrix element
+    const size_t la = xahp.n_rows + wahp.n_rows;
+    const size_t lb = xbhp.n_rows + wbhp.n_rows;
     wick_eval::scratch<Tc> &scratch = wick_eval::local_scratch<Tc>();
+    scratch.ensure_capacity(la, lb);
 
     // Prepare Wick contractions once for each spin sector
     this->prepare_spin(xahp, wahp, true, scratch.aa);

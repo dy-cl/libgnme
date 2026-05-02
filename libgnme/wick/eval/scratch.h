@@ -2,42 +2,34 @@
 #define LIBGNME_WICK_EVAL_SCRATCH_H
 
 #include <armadillo>
+#include <cassert>
 
 namespace libgnme {
 namespace wick_eval {
 
-/** \brief Resize a scratch vector.
-    \tparam T Element type.
-    \param x Scratch vector.
-    \param n Required size.
-    \ingroup gnme_wick
- **/
 template<typename T>
-inline void ensure_vec(arma::Col<T> &x, const size_t n)
+inline void reserve_vec(arma::Col<T> &x, const size_t n)
 {
-    if(x.n_elem != n) x.set_size(n);
+    if(x.n_elem < n) x.set_size(n);
 }
 
-/** \brief Resize a scratch matrix.
-    \tparam T Element type.
-    \param x Scratch matrix.
-    \param n Required row count.
-    \param m Required column count.
-    \ingroup gnme_wick
- **/
 template<typename T>
-inline void ensure_mat(arma::Mat<T> &x, const size_t n, const size_t m)
+inline void reserve_mat(arma::Mat<T> &x, const size_t n, const size_t m)
 {
-    if(x.n_rows != n || x.n_cols != m) x.set_size(n,m);
+    if(x.n_rows < n || x.n_cols < m) x.set_size(n, m);
 }
 
-/** \brief Same-spin Wick scratch storage.
-    \tparam Tc Matrix element type.
-    \ingroup gnme_wick
- **/
+inline void reserve_uvec(arma::uvec &x, const size_t n)
+{
+    if(x.n_elem < n) x.set_size(n);
+}
+
 template<typename Tc>
 struct same_scratch
 {
+    size_t l = 0;
+    size_t lcap = 0;
+
     arma::uvec rows;
     arma::uvec cols;
 
@@ -54,7 +46,6 @@ struct same_scratch
     arma::Mat<Tc> jslice_full;
     arma::Mat<Tc> jslice2;
     arma::Mat<Tc> det_mix2;
-
     arma::Mat<Tc> adjt_det;
     arma::Mat<Tc> adjt_det2;
 
@@ -63,45 +54,57 @@ struct same_scratch
 
     arma::Mat<Tc> lu;
 
-    void ensure(const size_t l)
+    void ensure_capacity(const size_t max_l)
     {
-        if(rows.n_elem != l) rows.set_size(l);
-        if(cols.n_elem != l) cols.set_size(l);
+        if(lcap >= max_l) return;
 
-        ensure_mat(det0, l, l);
-        ensure_mat(det1, l, l);
-        ensure_mat(det_mix, l, l);
-        ensure_mat(adjt_det, l, l);
-        ensure_mat(jslice_full, l, l);
+        lcap = max_l;
 
-        ensure_vec(fcol, l);
-        ensure_vec(dv, l);
-        ensure_vec(v1, l);
-        ensure_vec(dv1, l);
-        ensure_vec(invs, l);
+        reserve_uvec(rows, max_l);
+        reserve_uvec(cols, max_l);
 
-        ensure_mat(lu, 6, 6);
+        reserve_mat(det0, max_l, max_l);
+        reserve_mat(det1, max_l, max_l);
+        reserve_mat(det_mix, max_l, max_l);
+        reserve_mat(adjt_det, max_l, max_l);
+        reserve_mat(jslice_full, max_l, max_l);
 
-        const size_t lm1 = l ? l - 1 : 0;
+        reserve_vec(fcol, max_l);
+        reserve_vec(dv, max_l);
+        reserve_vec(v1, max_l);
+        reserve_vec(dv1, max_l);
+        reserve_vec(invs, max_l);
 
-        ensure_vec(dv1m, lm1);
-        ensure_vec(invslm1, lm1);
-        ensure_mat(det_mix2, lm1, lm1);
-        ensure_mat(jslice2, lm1, lm1);
-        ensure_mat(adjt_det2, lm1, lm1);
+        const size_t max_lm1 = max_l ? max_l - 1 : 0;
+        reserve_vec(dv1m, max_lm1);
+        reserve_vec(invslm1, max_lm1);
+
+        reserve_mat(det_mix2, max_lm1, max_lm1);
+        reserve_mat(jslice2, max_lm1, max_lm1);
+        reserve_mat(adjt_det2, max_lm1, max_lm1);
+
+        reserve_mat(lu, 6, 6);
+    }
+
+    void set_active(const size_t active_l)
+    {
+        assert(active_l <= lcap);
+        l = active_l;
     }
 };
 
-/** \brief Different-spin Wick scratch storage.
-    \tparam Tc Matrix element type.
-    \ingroup gnme_wick
- **/
 template<typename Tc>
 struct diff_scratch
 {
+    size_t la = 0;
+    size_t lb = 0;
+    size_t lacap = 0;
+    size_t lbcap = 0;
+
     arma::Mat<Tc> deta0;
     arma::Mat<Tc> deta1;
     arma::Mat<Tc> deta_mix;
+
     arma::Mat<Tc> detb0;
     arma::Mat<Tc> detb1;
     arma::Mat<Tc> detb_mix;
@@ -130,57 +133,75 @@ struct diff_scratch
     arma::Mat<Tc> lua;
     arma::Mat<Tc> lub;
 
-    void ensure(const size_t la, const size_t lb)
+    void ensure_capacity(const size_t max_la, const size_t max_lb)
     {
-        ensure_mat(deta0, la, la);
-        ensure_mat(deta1, la, la);
-        ensure_mat(deta_mix, la, la);
-        ensure_mat(adjt_deta, la, la);
-        ensure_vec(v1a, la);
-        ensure_vec(dv1a, la);
-        ensure_mat(iislicea, la, la);
-        ensure_vec(invsla, la);
-        ensure_mat(lua, 6, 6);
+        if(lacap < max_la) {
+            lacap = max_la;
 
-        const size_t lam1 = la ? la - 1 : 0;
-        ensure_mat(deta_mix_minor, lam1, lam1);
-        ensure_mat(adjt_deta_mix_minor, lam1, lam1);
-        ensure_vec(invslam1, lam1);
+            reserve_mat(deta0, max_la, max_la);
+            reserve_mat(deta1, max_la, max_la);
+            reserve_mat(deta_mix, max_la, max_la);
+            reserve_mat(adjt_deta, max_la, max_la);
+            reserve_mat(iislicea, max_la, max_la);
 
-        ensure_mat(detb0, lb, lb);
-        ensure_mat(detb1, lb, lb);
-        ensure_mat(detb_mix, lb, lb);
-        ensure_mat(adjt_detb, lb, lb);
-        ensure_vec(v1b, lb);
-        ensure_vec(dv1b, lb);
-        ensure_mat(iisliceb, lb, lb);
-        ensure_vec(invslb, lb);
-        ensure_mat(lub, 6, 6);
+            reserve_vec(v1a, max_la);
+            reserve_vec(dv1a, max_la);
+            reserve_vec(invsla, max_la);
 
-        const size_t lbm1 = lb ? lb - 1 : 0;
-        ensure_mat(detb_mix_minor, lbm1, lbm1);
-        ensure_mat(adjt_detb_mix_minor, lbm1, lbm1);
-        ensure_vec(invslbm1, lbm1);
+            const size_t max_lam1 = max_la ? max_la - 1 : 0;
+            reserve_mat(deta_mix_minor, max_lam1, max_lam1);
+            reserve_mat(adjt_deta_mix_minor, max_lam1, max_lam1);
+            reserve_vec(invslam1, max_lam1);
+
+            reserve_mat(lua, 6, 6);
+        }
+
+        if(lbcap < max_lb) {
+            lbcap = max_lb;
+
+            reserve_mat(detb0, max_lb, max_lb);
+            reserve_mat(detb1, max_lb, max_lb);
+            reserve_mat(detb_mix, max_lb, max_lb);
+            reserve_mat(adjt_detb, max_lb, max_lb);
+            reserve_mat(iisliceb, max_lb, max_lb);
+
+            reserve_vec(v1b, max_lb);
+            reserve_vec(dv1b, max_lb);
+            reserve_vec(invslb, max_lb);
+
+            const size_t max_lbm1 = max_lb ? max_lb - 1 : 0;
+            reserve_mat(detb_mix_minor, max_lbm1, max_lbm1);
+            reserve_mat(adjt_detb_mix_minor, max_lbm1, max_lbm1);
+            reserve_vec(invslbm1, max_lbm1);
+
+            reserve_mat(lub, 6, 6);
+        }
+    }
+
+    void set_active(const size_t active_la, const size_t active_lb)
+    {
+        assert(active_la <= lacap);
+        assert(active_lb <= lbcap);
+        la = active_la;
+        lb = active_lb;
     }
 };
 
-/** \brief Full Wick scratch storage for alpha, beta, and different-spin paths.
-    \tparam Tc Matrix element type.
-    \ingroup gnme_wick
- **/
 template<typename Tc>
 struct scratch
 {
     same_scratch<Tc> aa;
     same_scratch<Tc> bb;
     diff_scratch<Tc> diff;
+
+    void ensure_capacity(const size_t max_la, const size_t max_lb)
+    {
+        aa.ensure_capacity(max_la);
+        bb.ensure_capacity(max_lb);
+        diff.ensure_capacity(max_la, max_lb);
+    }
 };
 
-/** \brief Return thread-local Wick evaluator scratch storage.
-    \tparam Tc Matrix element type.
-    \return Thread-local scratch storage.
-    \ingroup gnme_wick
- **/
 template<typename Tc>
 inline scratch<Tc> &local_scratch()
 {
@@ -191,4 +212,4 @@ inline scratch<Tc> &local_scratch()
 } // namespace wick_eval
 } // namespace libgnme
 
-#endif // LIBGNME_WICK_EVAL_SCRATCH_H
+#endif

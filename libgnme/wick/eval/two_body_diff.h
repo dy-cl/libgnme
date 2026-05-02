@@ -36,7 +36,7 @@ inline void two_body_diff(
     const arma::Mat<Tc> &Vab,
     const arma::field<arma::Mat<Tc> > &XVaXb,
     const arma::field<arma::Mat<Tc> > &XVbXa,
-    arma::field<arma::Mat<Tc> > &IIab,
+    const arma::field<arma::Mat<Tc> > &IIab,
     const size_t nacta,
     const size_t nactb,
     same_scratch<Tc> &a,
@@ -45,12 +45,13 @@ inline void two_body_diff(
 {
     V = Tc(0.0);
 
-    const size_t la = a.rows.n_elem;
-    const size_t lb = b.rows.n_elem;
+    const size_t la = a.l;
+    const size_t lb = b.l;
 
     if(nza > la + 1 || nzb > lb + 1) return;
 
-    work.ensure(la, lb);
+    work.ensure_capacity(la, lb);
+    work.set_active(la, lb);
 
     if(nza == 0 && nzb == 0)
     {
@@ -86,7 +87,7 @@ inline void two_body_diff_m0(
     const arma::Mat<Tc> &Vab,
     const arma::field<arma::Mat<Tc> > &XVaXb,
     const arma::field<arma::Mat<Tc> > &XVbXa,
-    arma::field<arma::Mat<Tc> > &IIab,
+    const arma::field<arma::Mat<Tc> > &IIab,
     const size_t nacta,
     const size_t nactb,
     same_scratch<Tc> &a,
@@ -98,8 +99,8 @@ inline void two_body_diff_m0(
     const arma::uvec &rowb = b.rows;
     const arma::uvec &colb = b.cols;
 
-    const size_t la = rowa.n_elem;
-    const size_t lb = rowb.n_elem;
+    const size_t la = a.l;
+    const size_t lb = b.l;
 
     if(la == 0 && lb == 0)
     {
@@ -139,28 +140,13 @@ inline void two_body_diff_m0(
         return;
     }
 
-    Tc deta;
-    Tc detb;
+    const Tc deta = (la == 0)
+        ? Tc(1.0)
+        : adjugate_transpose(a.det0, a.l, work.adjt_deta);
 
-    if(la == 0)
-    {
-        work.adjt_deta.set_size(0,0);
-        deta = Tc(1.0);
-    }
-    else
-    {
-        deta = adjugate_transpose(a.det0, work.adjt_deta);
-    }
-
-    if(lb == 0)
-    {
-        work.adjt_detb.set_size(0,0);
-        detb = Tc(1.0);
-    }
-    else
-    {
-        detb = adjugate_transpose(b.det0, work.adjt_detb);
-    }
+    const Tc detb = (lb == 0)
+        ? Tc(1.0)
+        : adjugate_transpose(b.det0, b.l, work.adjt_detb);
 
     V = Vab(0,0) * deta * detb;
 
@@ -179,6 +165,9 @@ inline void two_body_diff_m0(
         V -= work.adjt_detb(r,c) * XVb(rowb(r), colb(c)) * deta;
     }
 
+    const diff_ii_slot<Tc> ii0000 =
+        resolve_diff_ii_slot(IIab, nacta, nactb, 0, 0, 0, 0);
+
     for(size_t cb=0; cb<lb; cb++)
     for(size_t rb=0; rb<lb; rb++)
     for(size_t ca=0; ca<la; ca++)
@@ -186,9 +175,7 @@ inline void two_body_diff_m0(
     {
         V += work.adjt_deta(ra,ca)
            * work.adjt_detb(rb,cb)
-           * two_body_diff_iiab(
-                 IIab, nacta, nactb,
-                 0, 0, 0, 0,
+           * ii0000.get(
                  rowa(ra), cola(ca),
                  rowb(rb), colb(cb));
     }
@@ -213,7 +200,7 @@ inline void two_body_diff_m0_11(
     const arma::Mat<Tc> &Vab,
     const arma::field<arma::Mat<Tc> > &XVaXb,
     const arma::field<arma::Mat<Tc> > &XVbXa,
-    arma::field<arma::Mat<Tc> > &IIab,
+    const arma::field<arma::Mat<Tc> > &IIab,
     const size_t nacta,
     const size_t nactb,
     same_scratch<Tc> &a,
@@ -227,13 +214,13 @@ inline void two_body_diff_m0_11(
     const Tc deta = a.det0(0,0);
     const Tc detb = b.det0(0,0);
 
+    const diff_ii_slot<Tc> ii0000 =
+        resolve_diff_ii_slot(IIab, nacta, nactb, 0, 0, 0, 0);
+
     V = Vab(0,0) * deta * detb
       - XVbXa(0,0,0)(ra,ca) * detb
       - XVaXb(0,0,0)(rb,cb) * deta
-      + two_body_diff_iiab(
-            IIab, nacta, nactb,
-            0, 0, 0, 0,
-            ra, ca, rb, cb);
+      + ii0000.get(ra, ca, rb, cb);
 }
 
 /** \brief Evaluate different-spin two-body matrix element for nz = 0 and ranks (2,2).
@@ -255,7 +242,7 @@ inline void two_body_diff_m0_22(
     const arma::Mat<Tc> &Vab,
     const arma::field<arma::Mat<Tc> > &XVaXb,
     const arma::field<arma::Mat<Tc> > &XVbXa,
-    arma::field<arma::Mat<Tc> > &IIab,
+    const arma::field<arma::Mat<Tc> > &IIab,
     const size_t nacta,
     const size_t nactb,
     same_scratch<Tc> &a,
@@ -282,6 +269,9 @@ inline void two_body_diff_m0_22(
     const size_t r1b = b.rows(1);
     const size_t c0b = b.cols(0);
     const size_t c1b = b.cols(1);
+
+    const diff_ii_slot<Tc> ii0000 =
+        resolve_diff_ii_slot(IIab, nacta, nactb, 0, 0, 0, 0);
 
     const arma::Mat<Tc> &A = XVbXa(0,0,0);
     const arma::Mat<Tc> &B = XVaXb(0,0,0);
@@ -325,10 +315,10 @@ inline void two_body_diff_m0_22(
             (i == 1 && j == 0) ? cofa10 :
             (i == 0 && j == 1) ? cofa01 : cofa11;
 
-        const Tc x00 = two_body_diff_iiab(IIab, nacta, nactb, 0, 0, 0, 0, ra, ca, r0b, c0b);
-        const Tc x10 = two_body_diff_iiab(IIab, nacta, nactb, 0, 0, 0, 0, ra, ca, r1b, c0b);
-        const Tc x01 = two_body_diff_iiab(IIab, nacta, nactb, 0, 0, 0, 0, ra, ca, r0b, c1b);
-        const Tc x11 = two_body_diff_iiab(IIab, nacta, nactb, 0, 0, 0, 0, ra, ca, r1b, c1b);
+        const Tc x00 = ii0000.get(ra, ca, r0b, c0b);
+        const Tc x10 = ii0000.get(ra, ca, r1b, c0b);
+        const Tc x01 = ii0000.get(ra, ca, r0b, c1b);
+        const Tc x11 = ii0000.get(ra, ca, r1b, c1b);
 
         V += Tc(0.5) * cof * (x00 * b11 - b01 * x10);
         V += Tc(0.5) * cof * (b00 * x11 - x01 * b10);
@@ -344,11 +334,11 @@ inline void two_body_diff_m0_22(
             (i == 0 && j == 0) ? cofb00 :
             (i == 1 && j == 0) ? cofb10 :
             (i == 0 && j == 1) ? cofb01 : cofb11;
-
-        const Tc x00 = two_body_diff_iiab(IIab, nacta, nactb, 0, 0, 0, 0, r0a, c0a, rb, cb);
-        const Tc x10 = two_body_diff_iiab(IIab, nacta, nactb, 0, 0, 0, 0, r1a, c0a, rb, cb);
-        const Tc x01 = two_body_diff_iiab(IIab, nacta, nactb, 0, 0, 0, 0, r0a, c1a, rb, cb);
-        const Tc x11 = two_body_diff_iiab(IIab, nacta, nactb, 0, 0, 0, 0, r1a, c1a, rb, cb);
+        
+        const Tc x00 = ii0000.get(r0a, c0a, rb, cb);
+        const Tc x10 = ii0000.get(r1a, c0a, rb, cb);
+        const Tc x01 = ii0000.get(r0a, c1a, rb, cb);
+        const Tc x11 = ii0000.get(r1a, c1a, rb, cb);
 
         V += Tc(0.5) * cof * (x00 * a11 - a01 * x10);
         V += Tc(0.5) * cof * (a00 * x11 - x01 * a10);
@@ -375,7 +365,7 @@ inline void two_body_diff_m0_13(
     const arma::Mat<Tc> &Vab,
     const arma::field<arma::Mat<Tc> > &XVaXb,
     const arma::field<arma::Mat<Tc> > &XVbXa,
-    arma::field<arma::Mat<Tc> > &IIab,
+    const arma::field<arma::Mat<Tc> > &IIab,
     const size_t nacta,
     const size_t nactb,
     same_scratch<Tc> &a,
@@ -386,11 +376,14 @@ inline void two_body_diff_m0_13(
     const size_t ca = a.cols(0);
     const Tc deta = a.det0(0,0);
 
-    const Tc detb = adjugate_transpose(b.det0, work.adjt_detb);
+    const Tc detb = adjugate_transpose(b.det0, b.l, work.adjt_detb);
     const arma::Mat<Tc> &cofb = work.adjt_detb;
 
     const arma::Mat<Tc> &A = XVbXa(0,0,0);
     const arma::Mat<Tc> &B = XVaXb(0,0,0);
+
+    const diff_ii_slot<Tc> ii0000 =
+        resolve_diff_ii_slot(IIab, nacta, nactb, 0, 0, 0, 0);
 
     Tc beta_term = Tc(0.0);
     for(size_t c=0; c<3; c++)
@@ -400,9 +393,7 @@ inline void two_body_diff_m0_13(
     Tc ii_term = Tc(0.0);
     for(size_t c=0; c<3; c++)
     for(size_t r=0; r<3; r++)
-        ii_term += cofb(r,c) * two_body_diff_iiab(
-            IIab, nacta, nactb, 0, 0, 0, 0,
-            ra, ca, b.rows(r), b.cols(c));
+        ii_term += cofb(r,c) * ii0000.get(ra, ca, b.rows(r), b.cols(c));
 
     V = Vab(0,0) * deta * detb
       - A(ra,ca) * detb
@@ -430,7 +421,7 @@ inline void two_body_diff_m0_31(
     const arma::Mat<Tc> &Vab,
     const arma::field<arma::Mat<Tc> > &XVaXb,
     const arma::field<arma::Mat<Tc> > &XVbXa,
-    arma::field<arma::Mat<Tc> > &IIab,
+    const arma::field<arma::Mat<Tc> > &IIab,
     const size_t nacta,
     const size_t nactb,
     same_scratch<Tc> &a,
@@ -441,11 +432,14 @@ inline void two_body_diff_m0_31(
     const size_t cb = b.cols(0);
     const Tc detb = b.det0(0,0);
 
-    const Tc deta = adjugate_transpose(a.det0, work.adjt_deta);
+    const Tc deta = adjugate_transpose(a.det0, a.l, work.adjt_deta);
     const arma::Mat<Tc> &cofa = work.adjt_deta;
 
     const arma::Mat<Tc> &A = XVbXa(0,0,0);
     const arma::Mat<Tc> &B = XVaXb(0,0,0);
+
+    const diff_ii_slot<Tc> ii0000 =
+        resolve_diff_ii_slot(IIab, nacta, nactb, 0, 0, 0, 0);
 
     Tc alpha_term = Tc(0.0);
     for(size_t c=0; c<3; c++)
@@ -455,9 +449,7 @@ inline void two_body_diff_m0_31(
     Tc ii_term = Tc(0.0);
     for(size_t c=0; c<3; c++)
     for(size_t r=0; r<3; r++)
-        ii_term += cofa(r,c) * two_body_diff_iiab(
-            IIab, nacta, nactb, 0, 0, 0, 0,
-            a.rows(r), a.cols(c), rb, cb);
+        ii_term += cofa(r,c) * ii0000.get(a.rows(r), a.cols(c), rb, cb);
 
     V = Vab(0,0) * deta * detb
       - detb * alpha_term
@@ -493,107 +485,88 @@ inline void two_body_diff_gen(
     const arma::Mat<Tc> &Vab,
     const arma::field<arma::Mat<Tc> > &XVaXb,
     const arma::field<arma::Mat<Tc> > &XVbXa,
-    arma::field<arma::Mat<Tc> > &IIab,
+    const arma::field<arma::Mat<Tc> > &IIab,
     const size_t nacta,
     const size_t nactb,
     same_scratch<Tc> &a,
     same_scratch<Tc> &b,
     diff_scratch<Tc> &work)
 {
-    const size_t la = rowa.n_elem;
-    const size_t lb = rowb.n_elem;
+    const size_t la = a.l;
+    const size_t lb = b.l;
 
-    for_each_m_combination(la+1, nza, [&](uint64_t bitsa) {
-    for_each_m_combination(lb+1, nzb, [&](uint64_t bitsb) {
+    for_each_m_combination(la + 1, nza, [&](const uint64_t bitsa) {
+    for_each_m_combination(lb + 1, nzb, [&](const uint64_t bitsb) {
         const size_t ma0 = bit(bitsa, 0);
         const size_t mb0 = bit(bitsb, 0);
 
-        if(la == 0)
-            work.deta_mix.set_size(0,0);
-        else
+        if(la != 0)
             mix_deta(bitsa, 1, a, work);
 
-        if(lb == 0)
-            work.detb_mix.set_size(0,0);
-        else
+        if(lb != 0)
             mix_detb(bitsb, 1, b, work);
 
-        Tc detDa;
-        Tc detDb;
+        const Tc detDa = (la == 0)
+            ? Tc(1.0)
+            : adjugate_transpose(work.deta_mix, a.l, work.adjt_deta);
 
-        if(la == 0)
-        {
-            detDa = Tc(1.0);
-            work.adjt_deta.set_size(0,0);
-        }
-        else
-        {
-            detDa = adjugate_transpose(work.deta_mix, work.adjt_deta);
-        }
+        const Tc detDb = (lb == 0)
+            ? Tc(1.0)
+            : adjugate_transpose(work.detb_mix, b.l, work.adjt_detb);
 
-        if(lb == 0)
-        {
-            detDb = Tc(1.0);
-            work.adjt_detb.set_size(0,0);
-        }
-        else
-        {
-            detDb = adjugate_transpose(work.detb_mix, work.adjt_detb);
-        }
-
-        V += Vab(ma0,mb0) * detDa * detDb;
+        V += Vab(ma0, mb0) * detDa * detDb;
 
         for(size_t i=0; i<la; i++)
         {
-            const size_t mai = bit(bitsa, i+1);
+            const size_t mai = bit(bitsa, i + 1);
 
             const Tc corr = column_replacement_correction(
-                work.deta_mix, work.adjt_deta, i,
+                work.deta_mix, work.adjt_deta, a.l, i,
                 [&](const size_t r) {
                     return XVbXa(ma0,mb0,mai)(rowa(r),cola(i));
                 });
 
-            V -= (detDa + corr) * detDb;
+            V -= corr * detDb;
         }
 
         for(size_t i=0; i<lb; i++)
         {
-            const size_t mbi = bit(bitsb, i+1);
+            const size_t mbi = bit(bitsb, i + 1);
 
             const Tc corr = column_replacement_correction(
-                work.detb_mix, work.adjt_detb, i,
+                work.detb_mix, work.adjt_detb, b.l, i,
                 [&](const size_t r) {
                     return XVaXb(mb0,ma0,mbi)(rowb(r),colb(i));
                 });
 
-            V -= (detDb + corr) * detDa;
+            V -= corr * detDa;
         }
 
         for(size_t i=0; i<la; i++)
         for(size_t j=0; j<la; j++)
         {
             const Tc detDa2 = mixed_minor_det(
-                a.det0, a.det1, bitsa, 2, i, j, work.deta_mix_minor);
+                a.det0, a.det1, bitsa, 1, i, j, work.deta_mix_minor);
 
             const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
-            const size_t maj = bit(bitsa, 1);
+            const size_t maj = bit(bitsa, j + 1);
 
             for(size_t k=0; k<lb; k++)
             {
-                const size_t mbk = bit(bitsb, k+1);
+                const size_t mbk = bit(bitsb, k + 1);
+
+                const diff_ii_slot<Tc> ii_slot =
+                    resolve_diff_ii_slot(IIab, nacta, nactb, ma0, maj, mb0, mbk);
 
                 const Tc corr = column_replacement_correction(
-                    work.detb_mix, work.adjt_detb, k,
+                    work.detb_mix, work.adjt_detb, b.l, k,
                     [&](const size_t r) {
-                        return two_body_diff_iiab(
-                            IIab, nacta, nactb,
-                            ma0, maj,
-                            mb0, mbk,
+                        return ii_slot.get(
                             rowa(i), cola(j),
                             rowb(r), colb(k));
                     });
 
-                V += Tc(0.5 * phase) * (detDb + corr) * detDa2;
+                V += Tc(0.5 * phase) * corr * detDa2;
             }
         }
 
@@ -601,27 +574,27 @@ inline void two_body_diff_gen(
         for(size_t j=0; j<lb; j++)
         {
             const Tc detDb2 = mixed_minor_det(
-                b.det0, b.det1, bitsb, 2, i, j, work.detb_mix_minor);
+                b.det0, b.det1, bitsb, 1, i, j, work.detb_mix_minor);
 
             const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
-            const size_t mbj = bit(bitsb, 1);
+            const size_t mbj = bit(bitsb, j + 1);
 
             for(size_t k=0; k<la; k++)
             {
-                const size_t mak = bit(bitsa, k+1);
+                const size_t mak = bit(bitsa, k + 1);
+
+                const diff_ii_slot<Tc> ii_slot =
+                    resolve_diff_ii_slot(IIab, nacta, nactb, ma0, mak, mb0, mbj);
 
                 const Tc corr = column_replacement_correction(
-                    work.deta_mix, work.adjt_deta, k,
+                    work.deta_mix, work.adjt_deta, a.l, k,
                     [&](const size_t r) {
-                        return two_body_diff_iiab(
-                            IIab, nacta, nactb,
-                            ma0, mak,
-                            mb0, mbj,
+                        return ii_slot.get(
                             rowa(r), cola(k),
                             rowb(i), colb(j));
                     });
 
-                V += Tc(0.5 * phase) * (detDa + corr) * detDb2;
+                V += Tc(0.5 * phase) * corr * detDb2;
             }
         }
     });

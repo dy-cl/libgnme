@@ -35,7 +35,7 @@ inline void two_body_same(
 {
     V = Tc(0.0);
 
-    const size_t nex = work.rows.n_elem;
+    const size_t nex = work.l;
     if(nz > nex + 2) return;
 
     const arma::uvec &rows = work.rows;
@@ -130,11 +130,13 @@ inline void two_body_same_m0_l2(
     const Tc det_c0 = u0 * a11 - a01 * u1;
     const Tc det_c1 = a00 * v1 - v0 * a10;
 
+    const same_ii_slot<Tc> ii0000 = resolve_same_ii_slot(II, nact, 0, 0, 0, 0);
+
     const Tc iiterm =
-          two_body_same_ii(II, nact, 0, 0, 0, 0, r0, c0, r1, c1)
-        - two_body_same_ii(II, nact, 0, 0, 0, 0, r0, c1, r1, c0)
-        - two_body_same_ii(II, nact, 0, 0, 0, 0, r1, c0, r0, c1)
-        + two_body_same_ii(II, nact, 0, 0, 0, 0, r1, c1, r0, c0);
+        ii0000.get(r0, c0, r1, c1)
+      - ii0000.get(r0, c1, r1, c0)
+      - ii0000.get(r1, c0, r0, c1)
+      + ii0000.get(r1, c1, r0, c0);
 
     V = V0(0) * detD - Tc(2.0) * (det_c0 + det_c1) + Tc(0.5) * iiterm;
 }
@@ -164,9 +166,10 @@ inline void two_body_same_m0_l3(
     same_scratch<Tc> &work)
 {
     arma::Mat<Tc> &cofD = work.adjt_det;
-    const Tc detD = adjugate_transpose(work.det0, cofD);
+    const Tc detD = adjugate_transpose(work.det0, work.l, cofD);
 
     const arma::Mat<Tc> &JK = XVX(0,0,0);
+    const same_ii_slot<Tc> ii0000 = resolve_same_ii_slot(II, nact, 0, 0, 0, 0);
 
     Tc vterm = Tc(0.0);
     for(size_t c=0; c<3; c++)
@@ -192,11 +195,11 @@ inline void two_body_same_m0_l3(
             const Tc m01 = work.det0(ra0, cb1);
             const Tc m10 = work.det0(ra1, cb0);
             const Tc m11 = work.det0(ra1, cb1);
-
-            const Tc j00 = two_body_same_ii(II, nact, 0, 0, 0, 0, ri, cj, rows(ra0), cols(cb0));
-            const Tc j01 = two_body_same_ii(II, nact, 0, 0, 0, 0, ri, cj, rows(ra0), cols(cb1));
-            const Tc j10 = two_body_same_ii(II, nact, 0, 0, 0, 0, ri, cj, rows(ra1), cols(cb0));
-            const Tc j11 = two_body_same_ii(II, nact, 0, 0, 0, 0, ri, cj, rows(ra1), cols(cb1));
+            
+            const Tc j00 = ii0000.get(ri, cj, rows(ra0), cols(cb0));
+            const Tc j01 = ii0000.get(ri, cj, rows(ra0), cols(cb1));
+            const Tc j10 = ii0000.get(ri, cj, rows(ra1), cols(cb0));
+            const Tc j11 = ii0000.get(ri, cj, rows(ra1), cols(cb1));
 
             jterm += phase * (m11 * j00 - m10 * j01 - m01 * j10 + m00 * j11);
         }
@@ -227,26 +230,27 @@ inline void two_body_same_m0_gen(
     const size_t nact,
     same_scratch<Tc> &work)
 {
-    const size_t nex = rows.n_elem;
+    const size_t nex = work.l;
 
     arma::Mat<Tc> &cofD = work.adjt_det;
-    const Tc detD = adjugate_transpose(work.det0, cofD);
+    const Tc detD = adjugate_transpose(work.det0, work.l, cofD);
 
     V = V0(0) * detD;
 
     const arma::Mat<Tc> &JK = XVX(0,0,0);
+    const same_ii_slot<Tc> ii0000 = resolve_same_ii_slot(II, nact, 0, 0, 0, 0);
 
     for(size_t k=0; k<nex; k++)
     {
         const size_t ck = cols(k);
 
         const Tc corr = column_replacement_correction(
-            work.det0, cofD, k,
+            work.det0, cofD, work.l, k,
             [&](const size_t r) {
                 return JK(rows(r), ck);
             });
 
-        V -= Tc(2.0) * (detD + corr);
+        V -= Tc(2.0) * corr;
     }
 
     for(size_t i=0; i<nex; i++)
@@ -256,28 +260,30 @@ inline void two_body_same_m0_gen(
         const size_t r_fixed = rows(i);
         const size_t c_fixed = cols(j);
 
-        minor_adjt(work.det0, i, j, work.det_mix2, work.adjt_det2,
-            [&](const size_t lm1,
-                const arma::Mat<Tc> &det_minor,
-                const arma::Mat<Tc> &cof,
-                const Tc det_minor_val)
-            {
-                for(size_t k=0; k<lm1; k++)
-                {
-                    const Tc corr = column_replacement_correction(
-                        det_minor, cof, k,
-                        [&](const size_t r) {
-                            return two_body_same_ii_replacement(
-                                II, nact,
-                                0, 0, 0, 0,
-                                rows, cols,
-                                i, j, r, k,
-                                r_fixed, c_fixed);
-                        });
+        minor_adjt(work.det0, work.l, i, j, work.det_mix2, work.adjt_det2,
+        [&](const arma::Mat<Tc> &det_minor,
+            const arma::Mat<Tc> &cof,
+            const Tc det_minor_val)
+        {
+            const size_t lm1 = nex - 1;
 
-                    V += Tc(0.5 * phase) * (det_minor_val + corr);
-                }
-            });
+            for(size_t k=0; k<lm1; k++)
+            {
+                const Tc corr = column_replacement_correction(
+                    det_minor, cof, lm1, k,
+                    [&](const size_t r) {
+                        return same_ii_replacement(
+                            ii0000,
+                            rows, cols,
+                            i, j,
+                            r, k,
+                            rows(i),
+                            cols(j));
+                    });
+
+                V += Tc(0.5 * phase) * corr;
+            }
+        });
     }
 }
 
@@ -303,7 +309,7 @@ inline void two_body_same_m0(
     const size_t nact,
     same_scratch<Tc> &work)
 {
-    const size_t nex = rows.n_elem;
+    const size_t nex = work.l;
 
     if(nex == 0)
     {
@@ -356,11 +362,11 @@ inline void two_body_same_gen(
     const size_t nact,
     same_scratch<Tc> &work)
 {
-    const size_t nex = rows.n_elem;
+    const size_t nex = work.l;
 
     if(nex == 0)
     {
-        for_each_m_combination(2, nz, [&](uint64_t bits) {
+        for_each_m_combination(2, nz, [&](const uint64_t bits) {
             const size_t m0 = bit(bits, 0);
             const size_t m1 = bit(bits, 1);
 
@@ -375,7 +381,7 @@ inline void two_body_same_gen(
         const size_t r0 = rows(0);
         const size_t c0 = cols(0);
 
-        for_each_m_combination(3, nz, [&](uint64_t bits) {
+        for_each_m_combination(3, nz, [&](const uint64_t bits) {
             const size_t m0 = bit(bits, 0);
             const size_t m1 = bit(bits, 1);
             const size_t m2 = bit(bits, 2);
@@ -391,65 +397,69 @@ inline void two_body_same_gen(
         const size_t m0 = bit(bits, 0);
         const size_t m1 = bit(bits, 1);
 
-        const Tc detDtmp = adjugate_transpose(work.det_mix, work.adjt_det);
+        const Tc detDtmp = adjugate_transpose(work.det_mix, work.l, work.adjt_det);
 
         Tc contrib = V0(m0 + m1) * detDtmp;
 
         for(size_t k=0; k<nex; k++)
         {
-            const size_t mk = bit(bits, k+2);
+            const size_t mk = bit(bits, k + 2);
             const size_t ck = cols(k);
 
+            const arma::Mat<Tc> &X = XVX(m0,m1,mk);
+
             const Tc corr = column_replacement_correction(
-                work.det_mix, work.adjt_det, k,
+                work.det_mix, work.adjt_det, work.l, k,
                 [&](const size_t r) {
-                    return XVX(m0,m1,mk)(rows(r),ck);
+                    return X(rows(r), ck);
                 });
 
-            contrib -= Tc(2.0) * (detDtmp + corr);
+            contrib -= Tc(2.0) * corr;
         }
 
         for(size_t i=0; i<nex; i++)
         for(size_t j=0; j<nex; j++)
         {
-            const double phase = ((i % 2) xor (j % 2)) ? -1.0 : 1.0;
+            const Tc phase = ((i ^ j) & 1) ? Tc(-1.0) : Tc(1.0);
 
             const size_t ri_fixed = rows(i);
             const size_t cj_fixed = cols(j);
-            const size_t mj = bit(bits, j+2);
+            const size_t mj = bit(bits, j + 2);
+            
+            minor_adjt(work.det_mix, work.l, i, j, work.det_mix2, work.adjt_det2,
+            [&](const arma::Mat<Tc> &det_minor,
+                const arma::Mat<Tc> &cof,
+                const Tc det_minor_val)
+            {
+                const size_t lm1 = nex - 1;
 
-            minor_adjt(work.det_mix, i, j, work.det_mix2, work.adjt_det2,
-                [&](const size_t lm1,
-                    const arma::Mat<Tc> &det_minor,
-                    const arma::Mat<Tc> &cof,
-                    const Tc det_minor_val)
+                for(size_t k2=0; k2<lm1; k2++)
                 {
-                    for(size_t k2=0; k2<lm1; k2++)
-                    {
-                        const size_t k_full = minor_to_full(k2, j);
-                        const size_t mk = bit(bits, k_full+2);
+                    const size_t k_full = minor_to_full(k2, j);
+                    const size_t mk = bit(bits, k_full + 2);
 
-                        const Tc corr = column_replacement_correction(
-                            det_minor, cof, k2,
-                            [&](const size_t r) {
-                                return two_body_same_ii_replacement(
-                                    II, nact,
-                                    m0, m1, mk, mj,
-                                    rows, cols,
-                                    i, j, r, k2,
-                                    ri_fixed, cj_fixed);
-                            });
+                    const same_ii_slot<Tc> ii_slot =
+                        resolve_same_ii_slot(II, nact, m0, m1, mk, mj);
 
-                        contrib += Tc(0.5 * phase) * (det_minor_val + corr);
-                    }
-                });
+                    const Tc corr = column_replacement_correction(
+                        det_minor, cof, lm1, k2,
+                        [&](const size_t r) {
+                            return same_ii_replacement(
+                                ii_slot,
+                                rows, cols,
+                                i, j,
+                                r, k2,
+                                ri_fixed, cj_fixed);
+                        });
+
+                    contrib += Tc(0.5) * phase * corr;
+                }
+            });
         }
 
         V += contrib;
     });
 }
-
-
 
 } // namespace wick_eval
 } // namespace libgnme

@@ -72,9 +72,6 @@ inline bool prepare_indices_small(
 
     if(l > 4) return false;
 
-    rows.set_size(l);
-    cols.set_size(l);
-
     if(l == 0) return true;
 
     if(nx > 0) prepare_index_x(xhp, 0, 0, rows, cols);
@@ -112,9 +109,6 @@ inline void prepare_indices(
     const size_t nw = whp.n_rows;
     const size_t l = nx + nw;
 
-    rows.set_size(l);
-    cols.set_size(l);
-
     size_t p = 0;
     for(size_t i=0; i<nx; i++)
     {
@@ -131,12 +125,12 @@ inline void prepare_indices(
     }
 }
 
-/** \brief Prepare rank-1 same-spin determinant branch directly.
+/** \brief Build a one-by-one replacement determinant.
     \tparam Tc Matrix element type.
-    \param X Lower-triangular contraction matrix.
-    \param rows Row indices.
-    \param cols Column indices.
-    \param D Output determinant.
+    \param X Lower-triangular replacement source matrix.
+    \param rows Row indices in the active orbital basis.
+    \param cols Column indices in the active orbital basis.
+    \param D Output determinant scratch matrix. Must already have capacity at least 1-by-1.
     \ingroup gnme_wick
  **/
 template<typename Tc>
@@ -146,12 +140,16 @@ inline void prepare_same_l1(
     const arma::uvec &cols,
     arma::Mat<Tc> &D)
 {
-    D.set_size(1,1);
-    D(0,0) = X(rows(0),cols(0));
+    D(0,0) = X(rows(0), cols(0));
 }
 
-/** \brief Prepare rank-2 same-spin determinant branch directly.
+/** \brief Build a two-by-two replacement determinant.
     \tparam Tc Matrix element type.
+    \param X Lower-triangular replacement source matrix.
+    \param Y Strictly upper-triangular replacement source matrix.
+    \param rows Row indices in the active orbital basis.
+    \param cols Column indices in the active orbital basis.
+    \param D Output determinant scratch matrix. Must already have capacity at least 2-by-2.
     \ingroup gnme_wick
  **/
 template<typename Tc>
@@ -162,12 +160,8 @@ inline void prepare_same_l2(
     const arma::uvec &cols,
     arma::Mat<Tc> &D)
 {
-    D.set_size(2,2);
-
-    const size_t r0 = rows(0);
-    const size_t r1 = rows(1);
-    const size_t c0 = cols(0);
-    const size_t c1 = cols(1);
+    const size_t r0 = rows(0), r1 = rows(1);
+    const size_t c0 = cols(0), c1 = cols(1);
 
     D(0,0) = X(r0,c0);
     D(0,1) = Y(r0,c1);
@@ -175,8 +169,13 @@ inline void prepare_same_l2(
     D(1,1) = X(r1,c1);
 }
 
-/** \brief Prepare rank-3 same-spin determinant branch directly.
+/** \brief Build a three-by-three replacement determinant.
     \tparam Tc Matrix element type.
+    \param X Lower-triangular replacement source matrix.
+    \param Y Strictly upper-triangular replacement source matrix.
+    \param rows Row indices in the active orbital basis.
+    \param cols Column indices in the active orbital basis.
+    \param D Output determinant scratch matrix. Must already have capacity at least 3-by-3.
     \ingroup gnme_wick
  **/
 template<typename Tc>
@@ -187,15 +186,8 @@ inline void prepare_same_l3(
     const arma::uvec &cols,
     arma::Mat<Tc> &D)
 {
-    D.set_size(3,3);
-
-    const size_t r0 = rows(0);
-    const size_t r1 = rows(1);
-    const size_t r2 = rows(2);
-
-    const size_t c0 = cols(0);
-    const size_t c1 = cols(1);
-    const size_t c2 = cols(2);
+    const size_t r0 = rows(0), r1 = rows(1), r2 = rows(2);
+    const size_t c0 = cols(0), c1 = cols(1), c2 = cols(2);
 
     D(0,0) = X(r0,c0);
     D(0,1) = Y(r0,c1);
@@ -210,8 +202,13 @@ inline void prepare_same_l3(
     D(2,2) = X(r2,c2);
 }
 
-/** \brief Prepare rank-4 same-spin determinant branch directly.
+/** \brief Build a four-by-four replacement determinant.
     \tparam Tc Matrix element type.
+    \param X Lower-triangular replacement source matrix.
+    \param Y Strictly upper-triangular replacement source matrix.
+    \param rows Row indices in the active orbital basis.
+    \param cols Column indices in the active orbital basis.
+    \param D Output determinant scratch matrix. Must already have capacity at least 4-by-4.
     \ingroup gnme_wick
  **/
 template<typename Tc>
@@ -222,17 +219,8 @@ inline void prepare_same_l4(
     const arma::uvec &cols,
     arma::Mat<Tc> &D)
 {
-    D.set_size(4,4);
-
-    const size_t r0 = rows(0);
-    const size_t r1 = rows(1);
-    const size_t r2 = rows(2);
-    const size_t r3 = rows(3);
-
-    const size_t c0 = cols(0);
-    const size_t c1 = cols(1);
-    const size_t c2 = cols(2);
-    const size_t c3 = cols(3);
+    const size_t r0 = rows(0), r1 = rows(1), r2 = rows(2), r3 = rows(3);
+    const size_t c0 = cols(0), c1 = cols(1), c2 = cols(2), c3 = cols(3);
 
     D(0,0) = X(r0,c0);
     D(0,1) = Y(r0,c1);
@@ -255,8 +243,14 @@ inline void prepare_same_l4(
     D(3,3) = X(r3,c3);
 }
 
-/** \brief Prepare one same-spin determinant branch.
+/** \brief Build a same-spin replacement determinant using specialised small-rank kernels.
     \tparam Tc Matrix element type.
+    \param X Lower-triangular replacement source matrix.
+    \param Y Strictly upper-triangular replacement source matrix.
+    \param rows Row indices in the active orbital basis.
+    \param cols Column indices in the active orbital basis.
+    \param l Active determinant rank.
+    \param D Output determinant scratch matrix. Must already have capacity at least l-by-l.
     \ingroup gnme_wick
  **/
 template<typename Tc>
@@ -265,41 +259,20 @@ inline void prepare_same_branch(
     const arma::Mat<Tc> &Y,
     const arma::uvec &rows,
     const arma::uvec &cols,
+    const size_t l,
     arma::Mat<Tc> &D)
 {
-    const size_t l = rows.n_elem;
+    if(l == 0) return;
+    if(l == 1) { prepare_same_l1(X, rows, cols, D); return; }
+    if(l == 2) { prepare_same_l2(X, Y, rows, cols, D); return; }
+    if(l == 3) { prepare_same_l3(X, Y, rows, cols, D); return; }
+    if(l == 4) { prepare_same_l4(X, Y, rows, cols, D); return; }
 
-    if(l == 0)
-    {
-        D.set_size(0,0);
-        return;
+    for(size_t i=0; i<l; ++i) {
+        const size_t r = rows(i);
+        for(size_t j=0; j<=i; ++j) D(i,j) = X(r, cols(j));
+        for(size_t j=i+1; j<l; ++j) D(i,j) = Y(r, cols(j));
     }
-
-    if(l == 1)
-    {
-        prepare_same_l1(X, rows, cols, D);
-        return;
-    }
-
-    if(l == 2)
-    {
-        prepare_same_l2(X, Y, rows, cols, D);
-        return;
-    }
-
-    if(l == 3)
-    {
-        prepare_same_l3(X, Y, rows, cols, D);
-        return;
-    }
-
-    if(l == 4)
-    {
-        prepare_same_l4(X, Y, rows, cols, D);
-        return;
-    }
-
-    build_det(X, Y, rows, cols, D);
 }
 
 /** \brief Prepare same-spin scratch determinant branches.
@@ -317,14 +290,15 @@ inline void prepare_same(
     same_scratch<Tc> &work)
 {
     const size_t l = xhp.n_rows + whp.n_rows;
+    
+    work.ensure_capacity(l);
+    work.set_active(l);
 
-    work.ensure(l);
     prepare_indices(xhp, whp, wshift, work.rows, work.cols);
-
-    prepare_same_branch(X(0), Y(0), work.rows, work.cols, work.det0);
+    prepare_same_branch(X(0), Y(0), work.rows, work.cols, l, work.det0);
 
     if(nz != 0)
-        prepare_same_branch(X(1), Y(1), work.rows, work.cols, work.det1);
+        prepare_same_branch(X(1), Y(1), work.rows, work.cols, l, work.det1);
 }
 
 /** \brief Copy one column from source to destination.
@@ -343,14 +317,139 @@ inline void copy_column(
         dst(r,col) = src(r,col);
 }
 
-/** \brief Form mixed same-spin determinants incrementally.
+/** \brief Mix one column from two determinant matrices.
+    \tparam Tc Matrix element type.
+    \param out Output mixed determinant. Must already have capacity at least 1-by-1.
+    \param det0 Determinant built from branch zero.
+    \param det1 Determinant built from branch one.
+    \param bits Column selector bits. Bit c selects column c from det1 when set, otherwise det0.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void mix_columns_l1(
+    arma::Mat<Tc> &out,
+    const arma::Mat<Tc> &det0,
+    const arma::Mat<Tc> &det1,
+    const uint64_t bits)
+{
+    out(0,0) = bit(bits, 0) ? det1(0,0) : det0(0,0);
+}
+
+/** \brief Mix two columns from two determinant matrices.
+    \tparam Tc Matrix element type.
+    \param out Output mixed determinant. Must already have capacity at least 2-by-2.
+    \param det0 Determinant built from branch zero.
+    \param det1 Determinant built from branch one.
+    \param bits Column selector bits. Bit c selects column c from det1 when set, otherwise det0.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void mix_columns_l2(
+    arma::Mat<Tc> &out,
+    const arma::Mat<Tc> &det0,
+    const arma::Mat<Tc> &det1,
+    const uint64_t bits)
+{
+    const bool b0 = bit(bits, 0), b1 = bit(bits, 1);
+
+    out(0,0) = b0 ? det1(0,0) : det0(0,0);
+    out(1,0) = b0 ? det1(1,0) : det0(1,0);
+
+    out(0,1) = b1 ? det1(0,1) : det0(0,1);
+    out(1,1) = b1 ? det1(1,1) : det0(1,1);
+}
+
+/** \brief Mix three columns from two determinant matrices.
+    \tparam Tc Matrix element type.
+    \param out Output mixed determinant. Must already have capacity at least 3-by-3.
+    \param det0 Determinant built from branch zero.
+    \param det1 Determinant built from branch one.
+    \param bits Column selector bits. Bit c selects column c from det1 when set, otherwise det0.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void mix_columns_l3(
+    arma::Mat<Tc> &out,
+    const arma::Mat<Tc> &det0,
+    const arma::Mat<Tc> &det1,
+    const uint64_t bits)
+{
+    const bool b0 = bit(bits, 0), b1 = bit(bits, 1), b2 = bit(bits, 2);
+
+    out(0,0) = b0 ? det1(0,0) : det0(0,0);
+    out(1,0) = b0 ? det1(1,0) : det0(1,0);
+    out(2,0) = b0 ? det1(2,0) : det0(2,0);
+
+    out(0,1) = b1 ? det1(0,1) : det0(0,1);
+    out(1,1) = b1 ? det1(1,1) : det0(1,1);
+    out(2,1) = b1 ? det1(2,1) : det0(2,1);
+
+    out(0,2) = b2 ? det1(0,2) : det0(0,2);
+    out(1,2) = b2 ? det1(1,2) : det0(1,2);
+    out(2,2) = b2 ? det1(2,2) : det0(2,2);
+}
+
+/** \brief Mix four columns from two determinant matrices.
+    \tparam Tc Matrix element type.
+    \param out Output mixed determinant. Must already have capacity at least 4-by-4.
+    \param det0 Determinant built from branch zero.
+    \param det1 Determinant built from branch one.
+    \param bits Column selector bits. Bit c selects column c from det1 when set, otherwise det0.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void mix_columns_l4(
+    arma::Mat<Tc> &out,
+    const arma::Mat<Tc> &det0,
+    const arma::Mat<Tc> &det1,
+    const uint64_t bits)
+{
+    for(size_t c=0; c<4; ++c) {
+        const arma::Mat<Tc> &src = bit(bits, c) ? det1 : det0;
+        out(0,c) = src(0,c);
+        out(1,c) = src(1,c);
+        out(2,c) = src(2,c);
+        out(3,c) = src(3,c);
+    }
+}
+
+/** \brief Mix columns from two determinant matrices using specialised small-rank kernels.
+    \tparam Tc Matrix element type.
+    \param out Output mixed determinant. Must already have capacity at least l-by-l.
+    \param det0 Determinant built from branch zero.
+    \param det1 Determinant built from branch one.
+    \param l Active determinant rank.
+    \param bits Column selector bits. Bit c selects column c from det1 when set, otherwise det0.
+    \ingroup gnme_wick
+ **/
+template<typename Tc>
+inline void mix_columns(
+    arma::Mat<Tc> &out,
+    const arma::Mat<Tc> &det0,
+    const arma::Mat<Tc> &det1,
+    const size_t l,
+    const uint64_t bits)
+{
+    if(l == 0) return;
+    if(l == 1) { mix_columns_l1(out, det0, det1, bits); return; }
+    if(l == 2) { mix_columns_l2(out, det0, det1, bits); return; }
+    if(l == 3) { mix_columns_l3(out, det0, det1, bits); return; }
+    if(l == 4) { mix_columns_l4(out, det0, det1, bits); return; }
+
+    for(size_t c=0; c<l; ++c) {
+        const arma::Mat<Tc> &src = bit(bits, c) ? det1 : det0;
+        for(size_t r=0; r<l; ++r) out(r,c) = src(r,c);
+    }
+}
+
+/** \brief Iterate over mixed determinant branches for a same-spin zero-overlap expansion.
     \tparam Tc Matrix element type.
     \tparam Fn Callback type.
-    \param l Excitation rank.
+    \param l Active determinant rank.
     \param nz Number of zero-overlap orbital pairs.
-    \param pbits Number of leading operator selector bits.
-    \param work Same-spin scratch.
-    \param f Callback receiving bitstring.
+    \param pbits Number of leading non-column selector bits in the branch encoding.
+    \param work Same-spin scratch storage.
+    \param f Callback called once for each branch bit pattern.
     \ingroup gnme_wick
  **/
 template<typename Tc, typename Fn>
@@ -361,49 +460,14 @@ inline void mix_dets_same(
     same_scratch<Tc> &work,
     Fn &&f)
 {
-    bool first = true;
-    uint64_t prev_cbits = 0;
-
     for_each_m_combination(l + pbits, nz, [&](const uint64_t bits) {
         const uint64_t cbits = bits >> pbits;
-
-        if(first)
-        {
-            work.det_mix.set_size(l,l);
-
-            for(size_t c=0; c<l; c++)
-            {
-                if(bit(cbits,c))
-                    copy_column(work.det1, work.det_mix, c);
-                else
-                    copy_column(work.det0, work.det_mix, c);
-            }
-
-            first = false;
-        }
-        else
-        {
-            uint64_t changed = prev_cbits ^ cbits;
-
-            while(changed != 0)
-            {
-                const size_t c = __builtin_ctzll(changed);
-
-                if(bit(cbits,c))
-                    copy_column(work.det1, work.det_mix, c);
-                else
-                    copy_column(work.det0, work.det_mix, c);
-
-                changed &= changed - 1;
-            }
-        }
-
-        prev_cbits = cbits;
+        mix_columns(work.det_mix, work.det0, work.det1, l, cbits);
         f(bits);
     });
 }
 
-/** \brief Form mixed alpha determinant incrementally.
+/** \brief Form mixed alpha determinant from prepared same-spin branch determinants.
     \tparam Tc Matrix element type.
     \param bits Zero-distribution bitstring.
     \param offset Bit offset for determinant columns.
@@ -418,20 +482,12 @@ inline void mix_deta(
     same_scratch<Tc> &same,
     diff_scratch<Tc> &work)
 {
-    const size_t l = same.rows.n_elem;
-    work.deta_mix.set_size(l,l);
-
-    for(size_t c=0; c<l; c++)
-    {
-        if(bit(bits,c+offset))
-            copy_column(same.det1, work.deta_mix, c);
-        else
-            copy_column(same.det0, work.deta_mix, c);
-    }
+    const size_t l = same.l;
+    const uint64_t cbits = bits >> offset;
+    mix_columns(work.deta_mix, same.det0, same.det1, l, cbits);
 }
 
-
-/** \brief Form mixed beta determinant incrementally.
+/** \brief Form mixed beta determinant from prepared same-spin branch determinants.
     \tparam Tc Matrix element type.
     \param bits Zero-distribution bitstring.
     \param offset Bit offset for determinant columns.
@@ -446,16 +502,9 @@ inline void mix_detb(
     same_scratch<Tc> &same,
     diff_scratch<Tc> &work)
 {
-    const size_t l = same.rows.n_elem;
-    work.detb_mix.set_size(l,l);
-
-    for(size_t c=0; c<l; c++)
-    {
-        if(bit(bits,c+offset))
-            copy_column(same.det1, work.detb_mix, c);
-        else
-            copy_column(same.det0, work.detb_mix, c);
-    }
+    const size_t l = same.l;
+    const uint64_t cbits = bits >> offset;
+    mix_columns(work.detb_mix, same.det0, same.det1, l, cbits);
 }
 
 } // namespace wick_eval

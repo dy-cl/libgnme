@@ -109,9 +109,9 @@ inline void one_body_m0_gen(
     const arma::field<arma::Mat<Tc> > &XFX,
     same_scratch<Tc> &work)
 {
-    const size_t nex = rows.n_elem;
+    const size_t nex = work.l;
 
-    const Tc detD = adjugate_transpose(work.det0, work.adjt_det);
+    const Tc detD = adjugate_transpose(work.det0, work.l, work.adjt_det);
 
     F = F0(0) * detD;
 
@@ -122,12 +122,12 @@ inline void one_body_m0_gen(
         const size_t ck = cols(k);
 
         const Tc corr = column_replacement_correction(
-            work.det0, work.adjt_det, k,
+            work.det0, work.adjt_det, work.l, k,
             [&](const size_t r) {
                 return Fmat(rows(r), ck);
             });
 
-        F -= (detD + corr);
+        F -= corr;
     }
 }
 
@@ -149,7 +149,7 @@ inline void one_body_m0(
     const arma::field<arma::Mat<Tc> > &XFX,
     same_scratch<Tc> &work)
 {
-    const size_t nex = rows.n_elem;
+    const size_t nex = work.l;
 
     if(nex == 0)
     {
@@ -192,7 +192,7 @@ inline void one_body_gen(
     const arma::field<arma::Mat<Tc> > &XFX,
     same_scratch<Tc> &work)
 {
-    const size_t nex = rows.n_elem;
+    const size_t nex = work.l;
 
     if(nex == 0)
     {
@@ -223,7 +223,7 @@ inline void one_body_gen(
     mix_dets_same(nex, nz, 1, work, [&](const uint64_t bits) {
         const size_t m0 = bit(bits, 0);
 
-        const Tc detD = adjugate_transpose(work.det_mix, work.adjt_det);
+        const Tc detD = adjugate_transpose(work.det_mix, work.l, work.adjt_det);
 
         F += F0(m0) * detD;
 
@@ -233,12 +233,12 @@ inline void one_body_gen(
             const size_t ck = cols(k);
 
             const Tc corr = column_replacement_correction(
-                work.det_mix, work.adjt_det, k,
+                work.det_mix, work.adjt_det, work.l, k,
                 [&](const size_t r) {
                     return XFX(m0,mk)(rows(r), ck);
                 });
 
-            F -= (detD + corr);
+            F -= corr;
         }
     });
 }
@@ -262,7 +262,7 @@ inline void spin_one_body(
 {
     F = Tc(0.0);
 
-    const size_t nex = work.rows.n_elem;
+    const size_t nex = work.l;
     if(nz > nex + 1) return;
 
     const arma::uvec &rows = work.rows;

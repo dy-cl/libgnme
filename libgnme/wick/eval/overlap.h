@@ -65,20 +65,21 @@ inline Tc overlap_l3(const arma::Mat<Tc> &D)
 /** \brief Evaluate a prepared overlap determinant.
     \tparam Tc Matrix element type.
     \param D Prepared determinant matrix.
+    \param nex Active determinant rank.
     \return Overlap determinant.
     \ingroup gnme_wick
  **/
 template<typename Tc>
-inline Tc overlap_det(const arma::Mat<Tc> &D)
+inline Tc overlap_det(
+    const arma::Mat<Tc> &D,
+    const size_t nex)
 {
-    const size_t nex = D.n_rows;
-
     if(nex == 0) return overlap_l0<Tc>();
     if(nex == 1) return overlap_l1(D);
     if(nex == 2) return overlap_l2(D);
     if(nex == 3) return overlap_l3(D);
 
-    return det(D);
+    return det(D, nex);
 }
 
 /** \brief Evaluate same-spin overlap for the nz = 0 branch.
@@ -90,7 +91,7 @@ inline Tc overlap_det(const arma::Mat<Tc> &D)
 template<typename Tc>
 inline Tc overlap_m0(same_scratch<Tc> &work)
 {
-    return overlap_det(work.det0);
+    return overlap_det(work.det0, work.l);
 }
 
 /** \brief Evaluate same-spin overlap when all determinant columns are zero-replacement columns.
@@ -102,7 +103,7 @@ inline Tc overlap_m0(same_scratch<Tc> &work)
 template<typename Tc>
 inline Tc overlap_ml(same_scratch<Tc> &work)
 {
-    return overlap_det(work.det1);
+    return overlap_det(work.det1, work.l);
 }
 
 /** \brief Evaluate same-spin overlap for the generic mixed-column case.
@@ -122,7 +123,7 @@ inline Tc overlap_gen(
     Tc S = Tc(0.0);
 
     mix_dets_same(nex, nz, 0, work, [&](const uint64_t) {
-        S += overlap_det(work.det_mix);
+        S += overlap_det(work.det_mix, work.l);
     });
 
     return S;
@@ -143,7 +144,7 @@ inline void spin_overlap(
 {
     S = Tc(0.0);
 
-    const size_t nex = work.rows.n_elem;
+    const size_t nex = work.l;
     if(nz > nex) return;
 
     if(nz == 0)

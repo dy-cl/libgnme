@@ -4,7 +4,7 @@
 #include "wick_uscf.h"
 #include "one_body_uscf.h"
 #include "two_body_uscf.h"
-#include "eval/scratch.h"
+#include "eval/wick_eval.h"
 
 namespace libgnme {
 
@@ -14,7 +14,6 @@ void wick_uscf<Tc,Tf,Tb>::add_one_body(arma::Mat<Tf> &F)
     add_one_body(F,F);
 }
 
-
 template<typename Tc, typename Tf, typename Tb>
 void wick_uscf<Tc,Tf,Tb>::add_one_body(arma::Mat<Tf> &Fa, arma::Mat<Tf> &Fb) 
 {
@@ -23,7 +22,6 @@ void wick_uscf<Tc,Tf,Tb>::add_one_body(arma::Mat<Tf> &Fa, arma::Mat<Tf> &Fb)
     // Define new integral object
     m_one_body_int = new one_body_uscf<Tc,Tf,Tb>(m_orba, m_orbb, Fa, Fb);
 }
-
 
 template<typename Tc, typename Tf, typename Tb>
 void wick_uscf<Tc,Tf,Tb>::add_two_body(arma::Mat<Tb> &V)
@@ -74,8 +72,13 @@ void wick_uscf<Tc,Tf,Tb>::evaluate_rdm1(
     // Get parity 
     int parity = pxa * pxb * pwa * pwb;
 
-    // Prepare Wick contractions once for each spin sector
+    // Ensure scratch capacity once for this matrix element
+    const size_t la = xahp.n_rows + wahp.n_rows;
+    const size_t lb = xbhp.n_rows + wbhp.n_rows;
     wick_eval::scratch<Tc> &scratch = wick_eval::local_scratch<Tc>();
+    scratch.ensure_capacity(la, lb);
+
+    // Prepare Wick contractions once for each spin sector
     this->prepare_spin(xahp, wahp, true, scratch.aa);
     this->prepare_spin(xbhp, wbhp, false, scratch.bb);
 
@@ -100,7 +103,6 @@ void wick_uscf<Tc,Tf,Tb>::evaluate_rdm1(
     Pb *= ((Tc) parity) * m_orba.m_redS * m_orbb.m_redS * sa; 
 }
 
-
 template<typename Tc, typename Tf, typename Tb>
 void wick_uscf<Tc,Tf,Tb>::evaluate_rdm12(
     bitset &bxa, bitset &bxb, 
@@ -121,8 +123,13 @@ void wick_uscf<Tc,Tf,Tb>::evaluate_rdm12(
     // Get parity 
     int parity = pxa * pxb * pwa * pwb;
 
-    // Prepare Wick contractions once for each spin sector
+    // Ensure scratch capacity once for this matrix element
+    const size_t la = xahp.n_rows + wahp.n_rows;
+    const size_t lb = xbhp.n_rows + wbhp.n_rows;
     wick_eval::scratch<Tc> &scratch = wick_eval::local_scratch<Tc>();
+    scratch.ensure_capacity(la, lb);
+
+    // Prepare Wick contractions once for each spin sector
     this->prepare_spin(xahp, wahp, true, scratch.aa);
     this->prepare_spin(xbhp, wbhp, false, scratch.bb);
 
@@ -163,7 +170,11 @@ void wick_uscf<Tc,Tf,Tb>::evaluate_overlap(
     arma::umat &wahp, arma::umat &wbhp,
     Tc &S)
 {
+    // Ensure scratch capacity once for this matrix element
+    const size_t la = xahp.n_rows + wahp.n_rows;
+    const size_t lb = xbhp.n_rows + wbhp.n_rows;
     wick_eval::scratch<Tc> &scratch = wick_eval::local_scratch<Tc>();
+    scratch.ensure_capacity(la, lb);
 
     // Prepare Wick contractions once for each spin sector
     this->prepare_spin(xahp, wahp, true, scratch.aa);
@@ -183,7 +194,11 @@ void wick_uscf<Tc,Tf,Tb>::evaluate_one_body_spin(
     arma::umat &xhp, arma::umat &whp, 
     Tc &S, Tc &V, bool alpha)
 {
+    // Ensure scratch capacity once for this spin-sector matrix element
+    const size_t l = xhp.n_rows + whp.n_rows;
     wick_eval::scratch<Tc> &scratch = wick_eval::local_scratch<Tc>();
+    scratch.ensure_capacity(alpha ? l : 0, alpha ? 0 : l);
+
     wick_eval::same_scratch<Tc> &work = alpha ? scratch.aa : scratch.bb;
 
     // Collect reduced overlap
@@ -213,37 +228,55 @@ void wick_uscf<Tc,Tf,Tb>::evaluate(
     arma::umat &wahp, arma::umat &wbhp,
     Tc &S, Tc &V)
 {
+    // Ensure scratch capacity once for this matrix element
+    const size_t la = xahp.n_rows + wahp.n_rows;
+    const size_t lb = xbhp.n_rows + wbhp.n_rows;
     wick_eval::scratch<Tc> &store = wick_eval::local_scratch<Tc>();
+    store.ensure_capacity(la, lb);
 
+    // Prepare Wick contractions once for each spin sector
     this->prepare_spin(xahp, wahp, true, store.aa);
     this->prepare_spin(xbhp, wbhp, false, store.bb);
 
+    // Evaluate overlap terms
     Tc sa = Tc(0.0), sb = Tc(0.0);
     this->spin_overlap(sa, true, store.aa);
     this->spin_overlap(sb, false, store.bb);
 
+    // Save total overlap
     S = m_orba.m_redS * m_orbb.m_redS * sa * sb;
 
+    // Save any constant term
     V = S * m_Vc;
 
+    // Evaluate one-body term if present
     if(m_one_body)
     {
+        // Temporary variables
         Tc Va = Tc(0.0), Vb = Tc(0.0);
 
+        // Evaluate separate spin one-body terms
         this->spin_one_body(Va, true, store.aa);
         this->spin_one_body(Vb, false, store.bb);
 
+        // Recombine and increment output
         V += m_orba.m_redS * m_orbb.m_redS * (Va * sb + Vb * sa);
     }
 
+    // Evaluate two-body term if present
     if(m_two_body)
     {
+        // Temporary variables
         Tc Vaa = Tc(0.0), Vbb = Tc(0.0), Vab = Tc(0.0);
 
+        // Same spin terms
         this->same_spin_two_body(Vaa, true, store.aa);
         this->same_spin_two_body(Vbb, false, store.bb);
+
+        // Different spin terms
         this->diff_spin_two_body(Vab, store.aa, store.bb, store.diff);
 
+        // Recombine
         V += Tc(0.5) * m_orba.m_redS * m_orbb.m_redS
            * (Vaa * sb + Vbb * sa + Tc(2.0) * Vab);
     }
